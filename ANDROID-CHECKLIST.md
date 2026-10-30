@@ -19,21 +19,22 @@ Only mark a step as passed after testing on a real Android phone. A green CI/Ver
 12. Test video/image position (negative and positive X/Y), scale, rotation and opacity.
 13. Test filter presets and manual brightness, contrast, saturation, hue and blur controls.
 14. Test fade in/out and slide transitions on text, image and video.
-15. Test audio clip volume, track volume, fade in/out and overlapping audio.
+15. Create two or more motion keyframes at different playhead positions; verify X/Y and scale interpolate in Preview and in the exported MP4.
+16. Test audio clip volume, track volume, fade in/out and overlapping audio.
 
 ## Export
-16. Export a short 720p MP4 containing one video, one image, a text layer and two overlapping audio tracks.
-17. Export a project with trim, speed, filter, scale, rotation, position, opacity, slide transition and audio fade.
-18. Play the exported MP4 in Android Gallery and check duration, image, text, sound synchronization and audio mix.
-19. Repeat at 1080p and confirm the output is not a black/empty placeholder.
-20. Test one unsupported/corrupt input; the editor must show a clear error and must not report a fake successful export.
+17. Export a short 720p MP4 containing one video, one image, a text layer and two overlapping audio tracks.
+18. Export a project with trim, speed, filter, scale, rotation, position, opacity, slide transition and audio fade.
+19. Play the exported MP4 in Android Gallery and check duration, image, text, sound synchronization and audio mix.
+20. Repeat at 1080p and confirm the output is not a black/empty placeholder.
+21. Test one unsupported/corrupt input; the editor must show a clear error and must not report a fake successful export.
 
 ## Cloud
-21. Sign in with a Supabase email/password account.
-22. Save the same project twice; confirm the second save updates media metadata instead of failing on duplicate IDs.
-23. Open the project from Cloud and verify all media are restored locally.
-24. Sign out, sign in again, and verify the Cloud project list is scoped to the signed-in account.
-25. Test a file over 50 MiB; local editing should still work and Cloud sync should report the skipped asset clearly.
+22. Sign in with a Supabase email/password account.
+23. Save the same project twice; confirm the second save updates media metadata instead of failing on duplicate IDs.
+24. Open the project from Cloud and verify all media are restored locally.
+25. Sign out, sign in again, and verify the Cloud project list is scoped to the signed-in account.
+26. Test a file over 50 MiB; local editing should still work and Cloud sync should report the skipped asset clearly.
 
 ## Known limits
 - AI auto-captions, TTS, background removal and motion tracking are not implemented in this phase.
