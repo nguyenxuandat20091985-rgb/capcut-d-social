@@ -43,6 +43,7 @@ export interface TimelineElement {
   saturation: number;
   hue: number;
   blur: number;
+  speed: number;
   name?: string;
   text?: string;
   fontSize?: number;
@@ -148,6 +149,7 @@ export function defaultElementProps(): Pick<
   | "saturation"
   | "hue"
   | "blur"
+  | "speed"
   | "trimStart"
   | "trimEnd"
 > {
@@ -167,6 +169,7 @@ export function defaultElementProps(): Pick<
     saturation: 1,
     hue: 0,
     blur: 0,
+    speed: 1,
     trimStart: 0,
     trimEnd: 0,
   };
