@@ -2,6 +2,7 @@
 
 import { useEditorStore } from "@/lib/store";
 import type { AspectRatio, TransitionType } from "@/lib/types";
+import { useEditorStore as editorStore } from "@/lib/store";
 
 const ASPECT_OPTIONS: AspectRatio[] = ["9:16", "16:9", "1:1", "4:5"];
 
@@ -30,6 +31,8 @@ export default function PropertiesPanel() {
   const updateElement = useEditorStore((s) => s.updateElement);
   const detachAudio = useEditorStore((s) => s.detachAudio);
   const media = useEditorStore((s) => s.media);
+  const currentTime = useEditorStore((s) => s.currentTime);
+  const seek = useEditorStore((s) => s.seek);
 
   if (selected.length === 0) {
     return (
@@ -74,6 +77,21 @@ export default function PropertiesPanel() {
   const isVideo = asset?.type === "video";
   const isImage = asset?.type === "image";
   const isAudio = asset?.type === "audio";
+  const isVisual = isText || isVideo || isImage;
+  const keyframes = el.keyframes ?? [];
+  const localTime = Math.max(0, Math.min(el.duration, currentTime - el.startTime));
+  const playheadInsideClip = currentTime >= el.startTime && currentTime <= el.startTime + el.duration;
+  const addKeyframe = () => {
+    const frame = {
+      time: Number(localTime.toFixed(2)),
+      x: el.x ?? 0,
+      y: el.y ?? 0,
+      scale: el.scale ?? 1,
+    };
+    const next = [...keyframes.filter((item) => Math.abs(item.time - frame.time) > 0.04), frame]
+      .sort((a, b) => a.time - b.time);
+    updateElement(el.id, { keyframes: next });
+  };
 
   return (
     <div className="flex h-full flex-col overflow-y-auto p-3">
@@ -314,6 +332,34 @@ export default function PropertiesPanel() {
       <Field label="Position Y (% canvas)">
         <Num value={el.y ?? 0} min={-100} max={100} onChange={(v) => updateElement(el.id, { y: v })} />
       </Field>
+
+      {isVisual && (
+        <>
+          <Section title="Motion keyframes" />
+          <button type="button" disabled={!playheadInsideClip}
+            onClick={addKeyframe}
+            className="mb-2 w-full rounded-md bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40">
+            + Keyframe tại {localTime.toFixed(2)}s
+          </button>
+          {keyframes.length === 0 ? (
+            <p className="mb-2 text-[10px] text-gray-600">Đặt keyframe ở các thời điểm khác nhau để tạo chuyển động vị trí và phóng to/thu nhỏ.</p>
+          ) : (
+            <div className="mb-2 space-y-1">
+              {[...keyframes].sort((a, b) => a.time - b.time).map((frame) => (
+                <div key={frame.time} className="flex items-center gap-2 rounded bg-gray-900 px-2 py-1.5">
+                  <button type="button" onClick={() => seek(el.startTime + frame.time)}
+                    className="flex-1 text-left text-[10px] text-blue-300 hover:text-blue-200">
+                    ◆ {frame.time.toFixed(2)}s · X {frame.x.toFixed(0)}% · Y {frame.y.toFixed(0)}% · {frame.scale.toFixed(2)}×
+                  </button>
+                  <button type="button" aria-label={`Xóa keyframe ${frame.time.toFixed(2)}s`}
+                    onClick={() => updateElement(el.id, { keyframes: keyframes.filter((item) => item.time !== frame.time) })}
+                    className="rounded px-1.5 py-1 text-xs text-gray-500 hover:bg-gray-800 hover:text-red-400">×</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
