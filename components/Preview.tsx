@@ -6,6 +6,16 @@ import { fadedOpacity, slideOffset } from "@/lib/fade";
 import { useEffect, useRef, useMemo } from "react";
 import { Play, Pause } from "lucide-react";
 
+function clipCssFilter(el: { brightness?: number; contrast?: number; saturation?: number; hue?: number; blur?: number }) {
+  return [
+    `brightness(${el.brightness ?? 1})`,
+    `contrast(${el.contrast ?? 1})`,
+    `saturate(${el.saturation ?? 1})`,
+    `hue-rotate(${el.hue ?? 0}deg)`,
+    `blur(${el.blur ?? 0}px)`,
+  ].join(" ");
+}
+
 const ASPECT_MAP: Record<string, string> = {
   "9:16": "aspect-[9/16]",
   "16:9": "aspect-[16/9]",
@@ -130,6 +140,7 @@ export default function Preview() {
                     className="absolute inset-0 h-full w-full object-contain"
                     style={{
                       opacity,
+                      filter: clipCssFilter(el),
                       transform: `translate(${el.x + slideX}px, ${el.y}px) scale(${el.scale}) rotate(${el.rotation}deg)`,
                     }}
                     draggable={false}
@@ -149,6 +160,7 @@ export default function Preview() {
                     volume={Math.max(0, Math.min(1, (el.volume ?? 1) * (track?.volume ?? 1)))}
                     opacity={opacity}
                     style={{
+                      filter: clipCssFilter(el),
                       transform: `translate(${el.x + slideX}px, ${el.y}px) scale(${el.scale}) rotate(${el.rotation}deg)`,
                     }}
                   />
