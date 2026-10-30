@@ -51,14 +51,16 @@ export function motionExpression(
   const keyframes = [...(element.keyframes ?? [])].sort((a, b) => a.time - b.time);
   if (keyframes.length === 0) return fallback.toFixed(4);
 
-  let expression = keyframes[keyframes.length - 1][field].toFixed(4);
+  let expression = (keyframes[keyframes.length - 1][field] ?? fallback).toFixed(4);
   for (let i = keyframes.length - 2; i >= 0; i--) {
     const left = keyframes[i];
     const right = keyframes[i + 1];
     const from = element.startTime + left.time;
     const to = element.startTime + right.time;
     const span = Math.max(0.001, right.time - left.time);
-    const value = `(${left[field].toFixed(4)}+(${(right[field] - left[field]).toFixed(4)})*(t-${from.toFixed(3)})/${span.toFixed(3)})`;
+    const leftValue = left[field] ?? fallback;
+    const rightValue = right[field] ?? fallback;
+    const value = `(${leftValue.toFixed(4)}+(${(rightValue - leftValue).toFixed(4)})*(t-${from.toFixed(3)})/${span.toFixed(3)})`;
     expression = `if(lt(t,${to.toFixed(3)}),${value},${expression})`;
   }
 
