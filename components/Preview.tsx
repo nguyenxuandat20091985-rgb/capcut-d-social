@@ -154,8 +154,9 @@ export default function Preview() {
                   <VideoLayer
                     key={el.id}
                     src={asset.src}
-                    localTime={local + (el.trimStart || 0)}
+                    localTime={local * (el.speed ?? 1) + (el.trimStart || 0)}
                     isPlaying={isPlaying}
+                    speed={el.speed ?? 1}
                     muted={track?.muted ?? false}
                     volume={Math.max(0, Math.min(1, (el.volume ?? 1) * (track?.volume ?? 1)))}
                     opacity={opacity}
@@ -173,8 +174,9 @@ export default function Preview() {
                   <AudioLayer
                     key={el.id}
                     src={asset.src}
-                    localTime={local + (el.trimStart || 0)}
+                    localTime={local * (el.speed ?? 1) + (el.trimStart || 0)}
                     isPlaying={isPlaying}
+                    speed={el.speed ?? 1}
                     volume={Math.max(0, Math.min(1, (el.volume ?? 1) * (track?.volume ?? 1)))}
                   />
                 );
@@ -217,6 +219,7 @@ function VideoLayer({
   isPlaying,
   muted,
   volume,
+  speed,
   opacity,
   style,
 }: {
@@ -225,6 +228,7 @@ function VideoLayer({
   isPlaying: boolean;
   muted: boolean;
   volume: number;
+  speed: number;
   opacity: number;
   style: React.CSSProperties;
 }) {
@@ -243,7 +247,8 @@ function VideoLayer({
     if (!v) return;
     v.muted = muted;
     v.volume = volume;
-  }, [muted, volume]);
+    v.playbackRate = speed;
+  }, [muted, volume, speed]);
 
   useEffect(() => {
     const v = ref.current;
@@ -275,11 +280,13 @@ function AudioLayer({
   localTime,
   isPlaying,
   volume,
+  speed,
 }: {
   src: string;
   localTime: number;
   isPlaying: boolean;
   volume: number;
+  speed: number;
 }) {
   const ref = useRef<HTMLAudioElement>(null);
 
@@ -295,6 +302,7 @@ function AudioLayer({
     const audio = ref.current;
     if (!audio) return;
     audio.volume = volume;
+    audio.playbackRate = speed;
     if (isPlaying) {
       audio.play().catch((error) => {
         console.warn("Audio preview could not start; tap Play again if the browser blocked autoplay.", error);
@@ -302,7 +310,7 @@ function AudioLayer({
     } else {
       audio.pause();
     }
-  }, [isPlaying, volume]);
+  }, [isPlaying, volume, speed]);
 
   return <audio ref={ref} src={src} preload="auto" />;
 }
