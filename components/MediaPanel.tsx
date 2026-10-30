@@ -5,6 +5,7 @@ import { defaultElementProps } from "@/lib/types";
 import { Upload, Film, Image, Music, Type, Trash2 } from "lucide-react";
 import { useRef } from "react";
 import { cn } from "@/lib/utils";
+import { deleteMediaFile, saveMediaFile } from "@/lib/media-db";
 
 function getMediaDuration(file: File): Promise<number> {
   return new Promise((resolve) => {
@@ -98,6 +99,13 @@ export default function MediaPanel() {
         mimeType: file.type,
       });
 
+      try {
+        await saveMediaFile(id, file);
+      } catch (error) {
+        console.error("IndexedDB media persistence failed", error);
+        alert(`Không thể lưu media để khôi phục sau khi tải lại trang: ${file.name}`);
+      }
+
       placeOnTimeline(id, type, duration, file.name);
     }
   };
@@ -167,7 +175,10 @@ export default function MediaPanel() {
               {item.duration.toFixed(1)}s
             </span>
             <button
-              onClick={() => removeMedia(item.id)}
+              onClick={async () => {
+                removeMedia(item.id);
+                try { await deleteMediaFile(item.id); } catch (error) { console.error(error); }
+              }}
               className="hidden rounded p-0.5 text-gray-500 hover:text-red-400 group-hover:block"
             >
               <Trash2 size={12} />
