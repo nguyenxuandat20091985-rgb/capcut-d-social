@@ -23,7 +23,7 @@ This checklist describes the actual implementation boundary. A feature is only m
 ### P0 — Core editing parity
 
 - [ ] Crop / free crop / fit-fill / pan-and-scan
-- [ ] Flip horizontal and vertical
+- [x] Flip horizontal and vertical (Preview + FFmpeg export)
 - [ ] Reverse video and reverse audio
 - [ ] Freeze frame / hold frame
 - [ ] Speed curve presets and custom speed ramp
