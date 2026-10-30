@@ -4,14 +4,14 @@ import {
   storageObjectUrl,
   supabaseHeaders,
   supabaseRestUrl,
+  type SupabaseRequestContext,
 } from "@/lib/supabase-rest";
 
 export const runtime = "nodejs";
 
 type RouteContext = { params: { id: string } };
 
-async function ownsProject(context: Awaited<ReturnType<typeof getSupabaseContext>> extends infer T ? Exclude<T, { error: Response }>["context"] : never, projectId: string) {
-  if (!context) return false;
+async function ownsProject(context: SupabaseRequestContext, projectId: string) {
   const query = new URLSearchParams({ id: `eq.${projectId}`, select: "id", limit: "1" });
   const response = await fetch(supabaseRestUrl(context, `projects?${query}`), {
     headers: supabaseHeaders(context),
