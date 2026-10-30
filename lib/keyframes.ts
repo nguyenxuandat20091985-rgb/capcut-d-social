@@ -14,7 +14,8 @@ export function getMotionAtTime(
   };
   const keyframes = [...(element.keyframes ?? [])].sort((a, b) => a.time - b.time);
   if (keyframes.length === 0) return base;
-  if (localTime <= keyframes[0].time) return {
+  if (localTime < keyframes[0].time) return base;
+  if (localTime === keyframes[0].time) return {
     x: keyframes[0].x,
     y: keyframes[0].y,
     scale: keyframes[0].scale,
@@ -60,5 +61,5 @@ export function motionExpression(
 
   const first = keyframes[0];
   const firstTime = element.startTime + first.time;
-  return `if(lt(t,${firstTime.toFixed(3)}),${first[field].toFixed(4)},${expression})`;
+  return `if(lt(t,${firstTime.toFixed(3)}),${fallback.toFixed(4)},${expression})`;
 }
