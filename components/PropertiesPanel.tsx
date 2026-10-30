@@ -308,11 +308,11 @@ export default function PropertiesPanel() {
         </>
       )}
 
-      <Field label="Position X">
-        <Num value={el.x ?? 0} onChange={(v) => updateElement(el.id, { x: v })} />
+      <Field label="Position X (% canvas)">
+        <Num value={el.x ?? 0} min={-100} max={100} onChange={(v) => updateElement(el.id, { x: v })} />
       </Field>
-      <Field label="Position Y">
-        <Num value={el.y ?? 0} onChange={(v) => updateElement(el.id, { y: v })} />
+      <Field label="Position Y (% canvas)">
+        <Num value={el.y ?? 0} min={-100} max={100} onChange={(v) => updateElement(el.id, { y: v })} />
       </Field>
     </div>
   );
@@ -345,16 +345,19 @@ function Num({
   value,
   onChange,
   min = 0,
+  max,
 }: {
   value: number;
   onChange: (v: number) => void;
   min?: number;
+  max?: number;
 }) {
   return (
     <input
       type="number"
       step={0.1}
       min={min}
+      max={max}
       value={Number(value.toFixed(2))}
       onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
       className="w-full rounded bg-gray-800 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-500"
