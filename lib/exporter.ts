@@ -10,6 +10,7 @@ import type {
   ExportResolution,
 } from "./types";
 import { resolutionPixels } from "./types";
+import { motionExpression } from "./keyframes";
 
 export interface ExportOptions {
   format: "mp4" | "webm";
@@ -324,6 +325,10 @@ export async function exportProject(
       const fc = (el.fontColor ?? asset.fontColor ?? "#ffffff").replace("#", "");
       const textOpacity = Math.max(0, Math.min(1, el.opacity ?? 1));
       const textScale = Math.max(0.1, Math.min(3, el.scale ?? 1));
+      const textScaleExpr = motionExpression(el, "scale", textScale);
+      const textXExpr = motionExpression(el, "x", textX);
+      const textYExpr = motionExpression(el, "y", textY);
+      const hasMotionKeyframes = (el.keyframes?.length ?? 0) > 0;
       const textRotation = (el.rotation ?? 0) * Math.PI / 180;
       const textX = Math.max(-100, Math.min(100, el.x ?? 0));
       const textY = Math.max(-100, Math.min(100, el.y ?? 0));
@@ -339,15 +344,16 @@ export async function exportProject(
       const out = `tx${overlayIdx}`;
       const fontOpt = hasFont ? `:fontfile=${FONT_FS_NAME}` : "";
       let textChain = `color=c=black@0:s=${width}x${height}:d=${duration}:r=${fps},format=yuva420p,drawtext=text='${txt}'${fontOpt}:fontsize=${fs}:fontcolor=0x${fc}:alpha='${textAlpha}':x=(w-text_w)/2:y=(h-text_h)/2`;
-      if (textScale !== 1) textChain += `,scale=w='max(1,iw*${textScale.toFixed(3)})':h='max(1,ih*${textScale.toFixed(3)})'`;
+      if (hasMotionKeyframes) textChain += `,scale=w='max(1,iw*(${textScaleExpr}))':h='max(1,ih*(${textScaleExpr}))':eval=frame`;
+      else if (textScale !== 1) textChain += `,scale=w='max(1,iw*${textScale.toFixed(3)})':h='max(1,ih*${textScale.toFixed(3)})'`;
       if (textRotation !== 0) textChain += `,rotate=${textRotation.toFixed(5)}:ow=rotw(iw):oh=roth(ih):c=black@0`;
       filterParts.push(`${textChain}[${textLayer}]`);
 
-      const baseTextX = `(W-w)/2+(${textX}/100)*W`;
+      const baseTextX = `(W-w)/2+(${textXExpr}/100)*W`;
       const textOverlayX = slideDirection !== 0 && slideDuration > 0
         ? `if(lt(t,${start}+${slideDuration.toFixed(3)}),${baseTextX}+${slideDirection}*W*(1-(t-${start})/${slideDuration.toFixed(3)}),${baseTextX})`
         : baseTextX;
-      const textOverlayY = `(H-h)/2+(${textY}/100)*H`;
+      const textOverlayY = `(H-h)/2+(${textYExpr}/100)*H`;
       filterParts.push(
         `[${lastLabel}][${textLayer}]overlay=x='${textOverlayX}':y='${textOverlayY}':enable='between(t,${start},${end})'[${out}]`
       );
@@ -370,8 +376,12 @@ export async function exportProject(
     const clipOpacity = Math.max(0, Math.min(1, el.opacity ?? 1));
     const positionX = Math.max(-100, Math.min(100, el.x ?? 0));
     const positionY = Math.max(-100, Math.min(100, el.y ?? 0));
+    const positionXExpr = motionExpression(el, "x", positionX);
+    const positionYExpr = motionExpression(el, "y", positionY);
+    const hasMotionKeyframes = (el.keyframes?.length ?? 0) > 0;
     let chain = `[${inIdx}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,format=yuva420p,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black@0,setpts=(PTS-STARTPTS)/${speed.toFixed(3)}+${start}/TB`;
-    if (clipScale !== 1) chain += `,scale=w='max(1,iw*${clipScale.toFixed(3)})':h='max(1,ih*${clipScale.toFixed(3)})'`;
+    if (hasMotionKeyframes) chain += `,scale=w='max(1,iw*(${motionExpression(el, "scale", clipScale)}))':h='max(1,ih*(${motionExpression(el, "scale", clipScale)}))':eval=frame`;
+    else if (clipScale !== 1) chain += `,scale=w='max(1,iw*${clipScale.toFixed(3)})':h='max(1,ih*${clipScale.toFixed(3)})'`;
     if (clipRotation !== 0) chain += `,rotate=${clipRotation.toFixed(5)}:ow=rotw(iw):oh=roth(ih):c=black@0`;
     if (clipOpacity < 1) chain += `,colorchannelmixer=aa=${clipOpacity.toFixed(3)}`;
     const transitionFade = el.transitionIn === "fade" || el.transitionIn === "dissolve"
@@ -411,8 +421,8 @@ export async function exportProject(
     chain += `[${scaled}]`;
     filterParts.push(chain);
 
-    const baseOverlayX = `(W-w)/2+(${positionX}/100)*W`;
-    const overlayY = `(H-h)/2+(${positionY}/100)*H`;
+    const baseOverlayX = `(W-w)/2+(${positionXExpr}/100)*W`;
+    const overlayY = `(H-h)/2+(${positionYExpr}/100)*H`;
     const slideDuration = Math.max(0, Math.min(el.duration, el.transitionDuration ?? 0.5));
     const slideDirection = el.transitionIn === "slide-left" ? 1 : el.transitionIn === "slide-right" ? -1 : 0;
     const overlayX = slideDirection !== 0 && slideDuration > 0
