@@ -326,6 +326,11 @@ export async function exportProject(
       const textX = Math.max(-100, Math.min(100, el.x ?? 0));
       const textY = Math.max(-100, Math.min(100, el.y ?? 0));
       const textRotation = (el.rotation ?? 0) * Math.PI / 180;
+      const slideDuration = Math.max(0, Math.min(el.duration, el.transitionDuration ?? 0.5));
+      const slideDirection = el.transitionIn === "slide-left" ? 1 : el.transitionIn === "slide-right" ? -1 : 0;
+      const textXExpr = slideDirection !== 0 && slideDuration > 0
+        ? `(w-text_w)/2+(${textX}/100)*w+${slideDirection}*w*(1-(t-${start})/${slideDuration.toFixed(3)})`
+        : `(w-text_w)/2+(${textX}/100)*w`;
       const textFadeIn = Math.max(0, Math.min(el.duration, el.fadeIn ?? 0));
       const textFadeOut = Math.max(0, Math.min(el.duration, el.fadeOut ?? 0));
       let textAlpha = textOpacity.toFixed(3);
@@ -334,7 +339,7 @@ export async function exportProject(
       const out = `tx${overlayIdx}`;
       const fontOpt = hasFont ? `:fontfile=${FONT_FS_NAME}` : "";
       filterParts.push(
-        `[${lastLabel}]drawtext=text='${txt}'${fontOpt}:fontsize=${fs}:fontcolor=0x${fc}:alpha='${textAlpha}':x=(w-text_w)/2+(${textX}/100)*w:y=(h-text_h)/2+(${textY}/100)*h:rotate=${textRotation.toFixed(5)}:enable='between(t,${start},${end})'[${out}]`
+        `[${lastLabel}]drawtext=text='${txt}'${fontOpt}:fontsize=${fs}:fontcolor=0x${fc}:alpha='${textAlpha}':x='${textXExpr}':y=(h-text_h)/2+(${textY}/100)*h:rotate=${textRotation.toFixed(5)}:enable='between(t,${start},${end})'[${out}]`
       );
       lastLabel = out;
       overlayIdx++;
@@ -389,8 +394,13 @@ export async function exportProject(
     chain += `[${scaled}]`;
     filterParts.push(chain);
 
-    const overlayX = `(W-w)/2+(${positionX}/100)*W`;
+    const baseOverlayX = `(W-w)/2+(${positionX}/100)*W`;
     const overlayY = `(H-h)/2+(${positionY}/100)*H`;
+    const slideDuration = Math.max(0, Math.min(el.duration, el.transitionDuration ?? 0.5));
+    const slideDirection = el.transitionIn === "slide-left" ? 1 : el.transitionIn === "slide-right" ? -1 : 0;
+    const overlayX = slideDirection !== 0 && slideDuration > 0
+      ? `if(lt(t,${start}+${slideDuration.toFixed(3)}),${baseOverlayX}+${slideDirection}*W*(1-(t-${start})/${slideDuration.toFixed(3)}),${baseOverlayX})`
+      : baseOverlayX;
     filterParts.push(
       `[${lastLabel}][${scaled}]overlay=x='${overlayX}':y='${overlayY}':enable='${fadeEnableExpr(el)}'[${out}]`
     );
