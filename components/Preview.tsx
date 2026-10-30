@@ -199,7 +199,22 @@ export default function Preview() {
       <div className="flex shrink-0 items-center justify-center gap-3 border-t border-gray-800 bg-gray-950 px-3 py-2 text-xs text-gray-400">
         <button
           type="button"
-          onClick={() => setPlaying(!isPlaying)}
+          onClick={() => {
+            const nextPlaying = !isPlaying;
+            // Start/pause media synchronously inside the tap so Android browsers
+            // recognize the action as a direct user gesture (autoplay policy).
+            stageRef.current?.querySelectorAll("video, audio").forEach((node) => {
+              const mediaNode = node as HTMLMediaElement;
+              if (nextPlaying) {
+                void mediaNode.play().catch((error) => {
+                  console.warn("Preview playback was blocked by the browser.", error);
+                });
+              } else {
+                mediaNode.pause();
+              }
+            });
+            setPlaying(nextPlaying);
+          }}
           aria-label={isPlaying ? "Tạm dừng xem trước" : "Phát xem trước"}
           className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition hover:bg-blue-500 active:scale-95"
         >
