@@ -39,7 +39,7 @@ IndexedDB phụ thuộc dung lượng thiết bị và chính sách dọn dữ l
 
 ## Supabase Cloud API
 
-Migration: `supabase/migrations/20261030000100_editor_projects.sql`.
+Migration: `supabase/migrations/20261030030211_editor_projects_and_assets_20261030.sql`.
 
 Thiết lập biến môi trường trong Vercel/local:
 
