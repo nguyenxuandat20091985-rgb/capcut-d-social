@@ -326,10 +326,15 @@ export async function exportProject(
       const textX = Math.max(-100, Math.min(100, el.x ?? 0));
       const textY = Math.max(-100, Math.min(100, el.y ?? 0));
       const textRotation = (el.rotation ?? 0) * Math.PI / 180;
+      const textFadeIn = Math.max(0, Math.min(el.duration, el.fadeIn ?? 0));
+      const textFadeOut = Math.max(0, Math.min(el.duration, el.fadeOut ?? 0));
+      let textAlpha = textOpacity.toFixed(3);
+      if (textFadeIn > 0) textAlpha += `*if(lt(t,${start}+${textFadeIn.toFixed(3)}),max(0,(t-${start})/${textFadeIn.toFixed(3)}),1)`;
+      if (textFadeOut > 0) textAlpha += `*if(gt(t,${end}-${textFadeOut.toFixed(3)}),max(0,(${end}-t)/${textFadeOut.toFixed(3)}),1)`;
       const out = `tx${overlayIdx}`;
       const fontOpt = hasFont ? `:fontfile=${FONT_FS_NAME}` : "";
       filterParts.push(
-        `[${lastLabel}]drawtext=text='${txt}'${fontOpt}:fontsize=${fs}:fontcolor=0x${fc}@${textOpacity.toFixed(3)}:x=(w-text_w)/2+(${textX}/100)*w:y=(h-text_h)/2+(${textY}/100)*h:rotate=${textRotation.toFixed(5)}:enable='between(t,${start},${end})'[${out}]`
+        `[${lastLabel}]drawtext=text='${txt}'${fontOpt}:fontsize=${fs}:fontcolor=0x${fc}:alpha='${textAlpha}':x=(w-text_w)/2+(${textX}/100)*w:y=(h-text_h)/2+(${textY}/100)*h:rotate=${textRotation.toFixed(5)}:enable='between(t,${start},${end})'[${out}]`
       );
       lastLabel = out;
       overlayIdx++;
