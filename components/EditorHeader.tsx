@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { restoreMediaSources } from "@/lib/media-db";
 
 const PHASE_LABEL: Record<ExportPhase, string> = {
   idle: "",
@@ -64,6 +65,9 @@ export default function EditorHeader() {
 
   useEffect(() => {
     hydrateFromAutosave();
+    void restoreMediaSources(useEditorStore.getState().media).then((restored) => {
+      useEditorStore.setState({ media: restored });
+    }).catch((error) => console.error("Media restore failed", error));
   }, [hydrateFromAutosave]);
 
   // Autosave every 15s
@@ -105,8 +109,12 @@ export default function EditorHeader() {
       const text = await f.text();
       const parsed = parseProjectFile(text);
       importProjectFile(parsed);
-      alert(
-        "Đã load project. Lưu ý: media blob URL không có trong file JSON — cần upload lại media nếu đã F5."
+      const restored = await restoreMediaSources(useEditorStore.getState().media);
+      useEditorStore.setState({ media: restored });
+      const missing = restored.filter((asset) => asset.type !== "text" && !asset.src).length;
+      alert(missing === 0
+        ? "Đã mở project và khôi phục media từ bộ nhớ thiết bị (nếu đã lưu trước đó)."
+        : `Đã mở project. Còn ${missing} media chưa có file gốc trên thiết bị; vui lòng tải lại các file đó.`
       );
     } catch (err) {
       alert(err instanceof Error ? err.message : "Không đọc được file");
