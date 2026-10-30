@@ -68,8 +68,8 @@ export async function POST(request: Request, { params }: RouteContext) {
       !body.fileName || !body.mimeType || !Number.isFinite(body.fileSize)) {
     return Response.json({ error: "Thiếu assetId, assetType hoặc thông tin file." }, { status: 400 });
   }
-  if ((body.fileSize ?? 0) <= 0 || (body.fileSize ?? 0) > 500 * 1024 * 1024) {
-    return Response.json({ error: "File phải lớn hơn 0 và không vượt quá 500 MB." }, { status: 413 });
+  if ((body.fileSize ?? 0) <= 0 || (body.fileSize ?? 0) > 50 * 1024 * 1024) {
+    return Response.json({ error: "File phải lớn hơn 0 và không vượt quá 50 MB." }, { status: 413 });
   }
 
   // Upload bytes directly from the browser to Supabase Storage; never proxy large video files through a Vercel Function.
