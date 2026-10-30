@@ -472,8 +472,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({
       project: file.project,
       tracks: file.tracks.map((t) => ({
-        volume: 1,
         ...t,
+        volume: t.volume ?? 1,
       })),
       elements: file.elements.map((e) => ({
         ...defaultElementProps(),
@@ -495,7 +495,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (saved) {
       set({
         project: saved.project,
-        tracks: saved.tracks.map((t) => ({ volume: 1, ...t })),
+        tracks: saved.tracks.map((t) => ({ ...t, volume: t.volume ?? 1 })),
         elements: saved.elements.map((e) => ({
           ...defaultElementProps(),
           ...e,
