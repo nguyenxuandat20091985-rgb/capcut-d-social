@@ -51,32 +51,37 @@ export async function POST(request: Request, { params }: RouteContext) {
     return Response.json({ error: "Không tìm thấy project hoặc không có quyền truy cập." }, { status: 404 });
   }
 
-  const form = await request.formData();
-  const file = form.get("file");
-  const assetId = form.get("assetId");
-  const assetType = form.get("assetType");
-  if (!(file instanceof File) || typeof assetId !== "string" || !assetId ||
-      !["video", "audio", "image"].includes(String(assetType))) {
-    return Response.json({ error: "Thiếu file, assetId hoặc assetType không hợp lệ." }, { status: 400 });
+  let body: {
+    assetId?: string;
+    assetType?: string;
+    fileName?: string;
+    mimeType?: string;
+    fileSize?: number;
+  };
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "JSON metadata không hợp lệ." }, { status: 400 });
   }
-  if (file.size <= 0 || file.size > 500 * 1024 * 1024) {
+
+  if (!body.assetId || !["video", "audio", "image"].includes(String(body.assetType)) ||
+      !body.fileName || !body.mimeType || !Number.isFinite(body.fileSize)) {
+    return Response.json({ error: "Thiếu assetId, assetType hoặc thông tin file." }, { status: 400 });
+  }
+  if ((body.fileSize ?? 0) <= 0 || (body.fileSize ?? 0) > 500 * 1024 * 1024) {
     return Response.json({ error: "File phải lớn hơn 0 và không vượt quá 500 MB." }, { status: 413 });
   }
 
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120) || "media";
-  const storagePath = `${auth.context.userId}/${params.id}/${assetId}-${safeName}`;
-  const objectUrl = storageObjectUrl(auth.context, `object/project-assets/${encodeStoragePath(storagePath)}`);
-  const upload = await fetch(objectUrl, {
-    method: "POST",
-    headers: supabaseHeaders(auth.context, {
-      "content-type": file.type || "application/octet-stream",
-      "x-upsert": "true",
-    }),
-    body: new Uint8Array(await file.arrayBuffer()),
+  // Upload bytes directly from the browser to Supabase Storage; never proxy large video files through a Vercel Function.
+  const safeName = body.fileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120) || "media";
+  const storagePath = `${auth.context.userId}/${params.id}/${body.assetId}-${safeName}`;
+  const infoUrl = storageObjectUrl(auth.context, `object/info/project-assets/${encodeStoragePath(storagePath)}`);
+  const storedObject = await fetch(infoUrl, {
+    headers: supabaseHeaders(auth.context),
     cache: "no-store",
   });
-  if (!upload.ok) {
-    return Response.json({ error: "Upload lên Supabase Storage thất bại.", detail: await upload.text() }, { status: upload.status });
+  if (!storedObject.ok) {
+    return Response.json({ error: "Chưa tìm thấy file trong Storage. Hãy upload file trực tiếp lên bucket trước khi đăng ký metadata." }, { status: 409 });
   }
 
   const insert = await fetch(supabaseRestUrl(auth.context, "project_assets"), {
@@ -86,24 +91,20 @@ export async function POST(request: Request, { params }: RouteContext) {
       Prefer: "return=representation",
     }),
     body: JSON.stringify({
-      id: assetId,
+      id: body.assetId,
       project_id: params.id,
       owner_id: auth.context.userId,
-      asset_type: assetType,
-      file_name: file.name,
-      mime_type: file.type || "application/octet-stream",
-      file_size: file.size,
+      asset_type: body.assetType,
+      file_name: body.fileName,
+      mime_type: body.mimeType,
+      file_size: body.fileSize,
       storage_path: storagePath,
     }),
     cache: "no-store",
   });
 
-  if (!insert.ok) {
-    await fetch(objectUrl, { method: "DELETE", headers: supabaseHeaders(auth.context), cache: "no-store" });
-    return Response.json({ error: "Không lưu được metadata media.", detail: await insert.text() }, { status: insert.status });
-  }
-
-  return new Response(await insert.text(), {
+  const result = await insert.text();
+  return new Response(result, {
     status: insert.status,
     headers: { "content-type": "application/json" },
   });
