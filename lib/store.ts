@@ -472,8 +472,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({
       project: file.project,
       tracks: file.tracks.map((t) => ({
-        volume: 1,
         ...t,
+        volume: t.volume ?? 1,
       })),
       elements: file.elements.map((e) => ({
         ...defaultElementProps(),
@@ -495,14 +495,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (saved) {
       set({
         project: saved.project,
-        tracks: saved.tracks.map((t) => ({ volume: 1, ...t })),
+        tracks: saved.tracks.map((t) => ({ ...t, volume: t.volume ?? 1 })),
         elements: saved.elements.map((e) => ({
           ...defaultElementProps(),
           ...e,
         })),
         media: (saved.media as MediaAsset[]).map((m) => ({
-          src: m.src || "",
           ...m,
+          src: m.src || "",
         })),
         hydrated: true,
       });
@@ -513,9 +513,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   persistAutosave: () => {
     const s = get();
-    // Include blob srcs for same-session restore
+    // Binary media is stored in IndexedDB; localStorage keeps only project metadata.
     const file = buildProjectFile(s.project, s.tracks, s.elements, s.media);
-    file.media = s.media;
     autosaveToLocalStorage(file);
   },
 }));

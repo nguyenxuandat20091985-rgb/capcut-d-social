@@ -174,7 +174,7 @@ export default function Timeline() {
 
   return (
     <div
-      className="flex h-full flex-col outline-none"
+      className="flex h-full flex-col touch-pan-x touch-pan-y outline-none"
       tabIndex={0}
       onKeyDown={handleKeyDown}
       onPointerMove={onPointerMove}
@@ -237,7 +237,7 @@ export default function Timeline() {
           ))}
         </div>
 
-        <div ref={scrollRef} className="min-w-0 flex-1 overflow-auto">
+        <div ref={scrollRef} className="min-w-0 flex-1 touch-pan-x touch-pan-y overflow-auto overscroll-contain">
           <div
             className="relative h-6 cursor-pointer border-b border-gray-800 bg-gray-950"
             style={{ width: timelineWidth }}
@@ -304,7 +304,7 @@ export default function Timeline() {
                           )
                         }
                         className={cn(
-                          "absolute top-1 flex cursor-grab items-center overflow-hidden rounded px-1.5 text-[10px] font-medium text-white shadow active:cursor-grabbing",
+                          "absolute top-1 flex cursor-grab touch-none select-none items-center overflow-hidden rounded px-1.5 text-[10px] font-medium text-white shadow active:cursor-grabbing",
                           isText
                             ? "bg-amber-600/90"
                             : isAudio
