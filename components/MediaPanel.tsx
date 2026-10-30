@@ -7,6 +7,47 @@ import { useRef } from "react";
 import { cn } from "@/lib/utils";
 import { deleteMediaFile, saveMediaFile } from "@/lib/media-db";
 
+function generateThumbnail(file: File): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const finish = (value?: string) => {
+      URL.revokeObjectURL(url);
+      resolve(value);
+    };
+    const draw = (source: CanvasImageSource, width: number, height: number) => {
+      const canvas = document.createElement("canvas");
+      const scale = Math.min(320 / Math.max(width, 1), 180 / Math.max(height, 1), 1);
+      canvas.width = Math.max(1, Math.round(width * scale));
+      canvas.height = Math.max(1, Math.round(height * scale));
+      const context = canvas.getContext("2d");
+      if (!context) return finish();
+      context.drawImage(source, 0, 0, canvas.width, canvas.height);
+      finish(canvas.toDataURL("image/jpeg", 0.68));
+    };
+
+    if (file.type.startsWith("image/")) {
+      const image = new window.Image();
+      image.onload = () => draw(image, image.naturalWidth, image.naturalHeight);
+      image.onerror = () => finish();
+      image.src = url;
+      return;
+    }
+    if (file.type.startsWith("video/")) {
+      const video = document.createElement("video");
+      video.muted = true;
+      video.preload = "metadata";
+      video.onloadedmetadata = () => {
+        video.currentTime = Math.min(0.15, Math.max(0, (video.duration || 1) / 2));
+      };
+      video.onseeked = () => draw(video, video.videoWidth, video.videoHeight);
+      video.onerror = () => finish();
+      video.src = url;
+      return;
+    }
+    finish();
+  });
+}
+
 function getMediaDuration(file: File): Promise<number> {
   return new Promise((resolve) => {
     if (file.type.startsWith("image/")) {
@@ -89,12 +130,16 @@ export default function MediaPanel() {
 
       const src = URL.createObjectURL(file);
       const duration = await getMediaDuration(file);
+      const thumbnail = type === "video" || type === "image"
+        ? await generateThumbnail(file)
+        : undefined;
 
       const id = addMedia({
         type,
         name: file.name,
         src,
         duration,
+        thumbnail,
         fileSize: file.size,
         mimeType: file.type,
       });
