@@ -513,9 +513,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   persistAutosave: () => {
     const s = get();
-    // Include blob srcs for same-session restore
+    // Binary media is stored in IndexedDB; localStorage keeps only project metadata.
     const file = buildProjectFile(s.project, s.tracks, s.elements, s.media);
-    file.media = s.media;
     autosaveToLocalStorage(file);
   },
 }));
