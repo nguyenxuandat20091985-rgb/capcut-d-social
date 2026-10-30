@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Cloud, CloudDownload, CloudUpload, LogOut, Loader2, X } from "lucide-react";
 import { useEditorStore } from "@/lib/store";
 import type { MediaAsset, ProjectFile } from "@/lib/types";
@@ -56,7 +56,7 @@ export default function CloudProjectsPanel() {
     return () => { alive = false; };
   }, [refreshProjects]);
 
-  const handleAuth = async (event: React.FormEvent) => {
+  const handleAuth = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setError("");
