@@ -55,6 +55,8 @@ interface EditorStore extends PlaybackState, SelectionState {
 
   addTrack: (type: Track["type"]) => string;
   removeTrack: (id: string) => void;
+  setTrackName: (id: string, name: string) => void;
+  toggleTrackLocked: (id: string) => void;
   toggleTrackMute: (id: string) => void;
   toggleTrackVisibility: (id: string) => void;
   setTrackVolume: (id: string, volume: number) => void;
@@ -295,10 +297,33 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   removeTrack: (id) => {
+    const current = get();
+    if (!current.tracks.some((track) => track.id === id)) return;
+    current.pushHistory();
+    set((s) => {
+      const removedElementIds = new Set(s.elements.filter((e) => e.trackId === id).map((e) => e.id));
+      return {
+        tracks: s.tracks.filter((t) => t.id !== id),
+        elements: s.elements.filter((e) => e.trackId !== id),
+        selectedElementIds: s.selectedElementIds.filter((elementId) => !removedElementIds.has(elementId)),
+        selectedTrackId: s.selectedTrackId === id ? null : s.selectedTrackId,
+      };
+    });
+  },
+
+  setTrackName: (id, name) => {
+    const cleanName = name.trim().slice(0, 40);
+    if (!cleanName) return;
     get().pushHistory();
     set((s) => ({
-      tracks: s.tracks.filter((t) => t.id !== id),
-      elements: s.elements.filter((e) => e.trackId !== id),
+      tracks: s.tracks.map((track) => track.id === id ? { ...track, name: cleanName } : track),
+    }));
+  },
+
+  toggleTrackLocked: (id) => {
+    get().pushHistory();
+    set((s) => ({
+      tracks: s.tracks.map((track) => track.id === id ? { ...track, locked: !track.locked } : track),
     }));
   },
 
@@ -347,10 +372,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   removeElements: (ids) => {
+    const s = get();
+    const removableIds = s.elements
+      .filter((element) => ids.includes(element.id) && !s.tracks.find((track) => track.id === element.trackId)?.locked)
+      .map((element) => element.id);
+    if (!removableIds.length) return;
     get().pushHistory();
-    set((s) => ({
-      elements: s.elements.filter((e) => !ids.includes(e.id)),
-      selectedElementIds: s.selectedElementIds.filter((id) => !ids.includes(id)),
+    set((state) => ({
+      elements: state.elements.filter((e) => !removableIds.includes(e.id)),
+      selectedElementIds: state.selectedElementIds.filter((id) => !removableIds.includes(id)),
     }));
   },
 
@@ -362,6 +392,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   moveElement: (id, startTime, trackId) => {
+    const current = get();
+    const element = current.elements.find((item) => item.id === id);
+    if (!element || current.tracks.find((track) => track.id === element.trackId)?.locked) return;
+    if (trackId && current.tracks.find((track) => track.id === trackId)?.locked) return;
     set((s) => ({
       elements: s.elements.map((e) =>
         e.id === id
@@ -376,8 +410,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   resizeElement: (id, edge, newTime) => {
-    const el = get().elements.find((e) => e.id === id);
-    if (!el) return;
+    const state = get();
+    const el = state.elements.find((e) => e.id === id);
+    if (!el || state.tracks.find((track) => track.id === el.trackId)?.locked) return;
     if (edge === "start") {
       const end = el.startTime + el.duration;
       const clamped = Math.max(0, Math.min(newTime, end - 0.1));
@@ -405,8 +440,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   splitElement: (id, atTime) => {
-    const el = get().elements.find((e) => e.id === id);
-    if (!el) return;
+    const state = get();
+    const el = state.elements.find((e) => e.id === id);
+    if (!el || state.tracks.find((track) => track.id === el.trackId)?.locked) return;
     const relative = atTime - el.startTime;
     if (relative <= 0.1 || relative >= el.duration - 0.1) return;
     get().pushHistory();
