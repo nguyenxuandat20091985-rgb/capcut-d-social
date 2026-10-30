@@ -170,7 +170,7 @@ export default function Preview() {
                     opacity={opacity}
                     style={{
                       filter: clipCssFilter(el),
-                      transform: `translate(${el.x + slideX}px, ${el.y}px) scale(${el.scale}) rotate(${el.rotation}deg)`,
+                      transform: `translate(${el.x + slideX}%, ${el.y}%) scale(${el.scale}) rotate(${el.rotation}deg)`,
                     }}
                   />
                 );
