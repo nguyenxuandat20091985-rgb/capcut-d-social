@@ -330,7 +330,7 @@ export async function exportProject(
       const slideDuration = Math.max(0, Math.min(el.duration, el.transitionDuration ?? 0.5));
       const slideDirection = el.transitionIn === "slide-left" ? 1 : el.transitionIn === "slide-right" ? -1 : 0;
       const textTransitionFade = el.transitionIn === "fade" || el.transitionIn === "dissolve" ? (el.transitionDuration ?? 0) : 0;
-      const textFadeIn = Math.max(0, Math.min(el.duration, el.fadeIn ?? 0, textTransitionFade || el.fadeIn || 0));
+      const textFadeIn = Math.max(0, Math.min(el.duration, Math.max(el.fadeIn ?? 0, textTransitionFade)));
       const textFadeOut = Math.max(0, Math.min(el.duration, el.fadeOut ?? 0));
       let textAlpha = textOpacity.toFixed(3);
       if (textFadeIn > 0) textAlpha += `*if(lt(t,${start}+${textFadeIn.toFixed(3)}),max(0,(t-${start})/${textFadeIn.toFixed(3)}),1)`;
@@ -377,7 +377,7 @@ export async function exportProject(
     const transitionFade = el.transitionIn === "fade" || el.transitionIn === "dissolve"
       ? (el.transitionDuration ?? 0)
       : 0;
-    const visualFadeIn = Math.max(0, Math.min(el.duration, el.fadeIn ?? 0, transitionFade || el.fadeIn || 0));
+    const visualFadeIn = Math.max(0, Math.min(el.duration, Math.max(el.fadeIn ?? 0, transitionFade)));
     const visualFadeOut = Math.max(0, Math.min(el.duration, el.fadeOut ?? 0));
     if (visualFadeIn > 0) chain += `,fade=t=in:st=${start.toFixed(3)}:d=${visualFadeIn.toFixed(3)}:alpha=1`;
     if (visualFadeOut > 0) chain += `,fade=t=out:st=${(end - visualFadeOut).toFixed(3)}:d=${visualFadeOut.toFixed(3)}:alpha=1`;
