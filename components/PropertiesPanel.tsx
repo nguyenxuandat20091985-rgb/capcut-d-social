@@ -5,6 +5,15 @@ import type { AspectRatio, TransitionType } from "@/lib/types";
 
 const ASPECT_OPTIONS: AspectRatio[] = ["9:16", "16:9", "1:1", "4:5"];
 
+const FILTER_PRESETS = [
+  { label: "Gốc", values: { brightness: 1, contrast: 1, saturation: 1, hue: 0, blur: 0 } },
+  { label: "Rực rỡ", values: { brightness: 1.05, contrast: 1.15, saturation: 1.35, hue: 0, blur: 0 } },
+  { label: "Ấm", values: { brightness: 1.04, contrast: 1.04, saturation: 1.12, hue: -8, blur: 0 } },
+  { label: "Lạnh", values: { brightness: 1.02, contrast: 1.08, saturation: 1.05, hue: 12, blur: 0 } },
+  { label: "Đen trắng", values: { brightness: 1.02, contrast: 1.1, saturation: 0, hue: 0, blur: 0 } },
+  { label: "Mềm", values: { brightness: 1.05, contrast: 0.9, saturation: 0.85, hue: 0, blur: 1.2 } },
+];
+
 const TRANSITIONS: { id: TransitionType; label: string }[] = [
   { id: "none", label: "None" },
   { id: "fade", label: "Fade" },
@@ -242,6 +251,14 @@ export default function PropertiesPanel() {
       {(isVideo || isImage) && (
         <>
           <Section title="Màu sắc & bộ lọc" />
+          <div className="mb-3 flex flex-wrap gap-1">
+            {FILTER_PRESETS.map((preset) => (
+              <button key={preset.label} type="button" onClick={() => updateElement(el.id, preset.values)}
+                className="rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-[10px] text-gray-300 hover:border-blue-500 hover:text-white">
+                {preset.label}
+              </button>
+            ))}
+          </div>
           <Field label={`Độ sáng (${Math.round((el.brightness ?? 1) * 100)}%)`}>
             <input type="range" min={0} max={2} step={0.01} value={el.brightness ?? 1}
               onChange={(e) => updateElement(el.id, { brightness: parseFloat(e.target.value) })} className="w-full" />
