@@ -3,19 +3,15 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "CapCut D-Social",
-  description: "Social media video editor inspired by CapCut",
+  description: "Social media video editor inspired by CapCut & OpenCut",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className="antialiased bg-gray-950 text-white min-h-screen">
-        {children}
-      </body>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }
