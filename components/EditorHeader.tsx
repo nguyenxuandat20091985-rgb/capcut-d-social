@@ -70,6 +70,26 @@ export default function EditorHeader() {
     }).catch((error) => console.error("Media restore failed", error));
   }, [hydrateFromAutosave]);
 
+  // Debounced autosave after edits so a quick refresh does not lose the last 15 seconds.
+  useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = useEditorStore.subscribe((state, previous) => {
+      if (
+        state.project !== previous.project ||
+        state.media !== previous.media ||
+        state.tracks !== previous.tracks ||
+        state.elements !== previous.elements
+      ) {
+        if (timeout) clearTimeout(timeout);
+        timeout = setTimeout(() => state.persistAutosave(), 800);
+      }
+    });
+    return () => {
+      if (timeout) clearTimeout(timeout);
+      unsubscribe();
+    };
+  }, []);
+
   // Autosave every 15s
   useEffect(() => {
     const id = setInterval(() => persistAutosave(), 15000);
