@@ -384,13 +384,6 @@ export async function exportProject(
     chain += `[${scaled}]`;
     filterParts.push(chain);
 
-    // Slide offset approximation via overlay x
-    let ox = 0;
-    if (el.transitionIn === "slide-left" || el.transitionIn === "slide-right") {
-      // static mid-point not animated in simple graph — center
-      ox = 0;
-    }
-
     const overlayX = `(W-w)/2+(${positionX}/100)*W`;
     const overlayY = `(H-h)/2+(${positionY}/100)*H`;
     filterParts.push(
