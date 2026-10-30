@@ -166,7 +166,7 @@ export default function Preview() {
                     isPlaying={isPlaying}
                     speed={el.speed ?? 1}
                     muted={track?.muted ?? false}
-                    volume={Math.max(0, Math.min(1, (el.volume ?? 1) * (track?.volume ?? 1) * clipFadeGain(el, local))}
+                    volume={Math.max(0, Math.min(1, (el.volume ?? 1) * (track?.volume ?? 1) * clipFadeGain(el, local)))}
                     opacity={opacity}
                     style={{
                       filter: clipCssFilter(el),
