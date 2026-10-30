@@ -320,16 +320,16 @@ export async function exportProject(
 
     if (asset.type === "text") {
       const txt = escapeDrawtext(el.text ?? asset.text ?? "Text");
-      const fs = el.fontSize ?? asset.fontSize ?? 48;
-      const fc = (el.fontColor ?? asset.fontColor ?? "#ffffff").replace(
-        "#",
-        ""
-      );
+      const fs = (el.fontSize ?? asset.fontSize ?? 48) * Math.max(0.1, Math.min(3, el.scale ?? 1));
+      const fc = (el.fontColor ?? asset.fontColor ?? "#ffffff").replace("#", "");
+      const textOpacity = Math.max(0, Math.min(1, el.opacity ?? 1));
+      const textX = Math.max(-100, Math.min(100, el.x ?? 0));
+      const textY = Math.max(-100, Math.min(100, el.y ?? 0));
+      const textRotation = (el.rotation ?? 0) * Math.PI / 180;
       const out = `tx${overlayIdx}`;
       const fontOpt = hasFont ? `:fontfile=${FONT_FS_NAME}` : "";
-      // approximate fade via alpha not available on drawtext easily — use enable window
       filterParts.push(
-        `[${lastLabel}]drawtext=text='${txt}'${fontOpt}:fontsize=${fs}:fontcolor=0x${fc}:x=(w-text_w)/2+${el.x}:y=(h-text_h)/2+${el.y}:enable='between(t,${start},${end})'[${out}]`
+        `[${lastLabel}]drawtext=text='${txt}'${fontOpt}:fontsize=${fs}:fontcolor=0x${fc}@${textOpacity.toFixed(3)}:x=(w-text_w)/2+(${textX}/100)*w:y=(h-text_h)/2+(${textY}/100)*h:rotate=${textRotation.toFixed(5)}:enable='between(t,${start},${end})'[${out}]`
       );
       lastLabel = out;
       overlayIdx++;
@@ -345,7 +345,15 @@ export async function exportProject(
 
     // Scale + pad
     const speed = Math.max(0.5, Math.min(2, el.speed ?? 1));
-    let chain = `[${inIdx}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,format=yuva420p,setpts=(PTS-STARTPTS)/${speed.toFixed(3)}+${start}/TB`;
+    const clipScale = Math.max(0.1, Math.min(3, el.scale ?? 1));
+    const clipRotation = (el.rotation ?? 0) * Math.PI / 180;
+    const clipOpacity = Math.max(0, Math.min(1, el.opacity ?? 1));
+    const positionX = Math.max(-100, Math.min(100, el.x ?? 0));
+    const positionY = Math.max(-100, Math.min(100, el.y ?? 0));
+    let chain = `[${inIdx}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,format=yuva420p,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black@0,setpts=(PTS-STARTPTS)/${speed.toFixed(3)}+${start}/TB`;
+    if (clipScale !== 1) chain += `,scale=w='max(1,iw*${clipScale.toFixed(3)})':h='max(1,ih*${clipScale.toFixed(3)})'`;
+    if (clipRotation !== 0) chain += `,rotate=${clipRotation.toFixed(5)}:ow=rotw(iw):oh=roth(ih):c=black@0`;
+    if (clipOpacity < 1) chain += `,colorchannelmixer=aa=${clipOpacity.toFixed(3)}`;
 
     // Apply non-destructive color controls consistently with the live Preview.
     const brightness = Math.max(0, Math.min(2, el.brightness ?? 1));
@@ -383,8 +391,10 @@ export async function exportProject(
       ox = 0;
     }
 
+    const overlayX = `(W-w)/2+(${positionX}/100)*W`;
+    const overlayY = `(H-h)/2+(${positionY}/100)*H`;
     filterParts.push(
-      `[${lastLabel}][${scaled}]overlay=${ox}:0:enable='${fadeEnableExpr(el)}'[${out}]`
+      `[${lastLabel}][${scaled}]overlay=x='${overlayX}':y='${overlayY}':enable='${fadeEnableExpr(el)}'[${out}]`
     );
 
     lastLabel = out;
