@@ -1,6 +1,7 @@
 "use client";
 
 import { useEditorStore } from "@/lib/store";
+import { defaultElementProps } from "@/lib/types";
 import { Upload, Film, Image, Music, Type, Trash2 } from "lucide-react";
 import { useRef } from "react";
 import { cn } from "@/lib/utils";
@@ -62,18 +63,11 @@ export default function MediaPanel() {
     );
 
     addElement({
+      ...defaultElementProps(),
       mediaId,
       trackId: track.id,
       startTime,
       duration,
-      trimStart: 0,
-      trimEnd: 0,
-      volume: 1,
-      opacity: 1,
-      scale: 1,
-      x: 0,
-      y: 0,
-      rotation: 0,
       name,
       ...textExtras,
     });

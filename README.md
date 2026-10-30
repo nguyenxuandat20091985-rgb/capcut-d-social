@@ -1,50 +1,42 @@
 # CapCut D-Social
 
-Social-first video editor — Next.js · TypeScript · Tailwind · Zustand · FFmpeg.wasm.
+Editor video social — Next.js · Zustand · FFmpeg.wasm.
 
-Inspired by [OpenCut](https://github.com/OpenCut-app/OpenCut).
+## Tính năng chính
 
-## Features
+| Nhóm | Chi tiết |
+|------|----------|
+| Timeline | Kéo clip, đổi track, resize, split (S), Delete |
+| Undo/Redo | Ctrl+Z / Ctrl+Y, 50 bước |
+| Text | Overlay tiếng Việt (Noto Sans khi export) |
+| Fade & Transition | Fade In/Out, Dissolve, Fade, Slide |
+| Audio | Volume per clip, **Detach Audio** từ video |
+| Project | Save/Load JSON (Ctrl+S), autosave localStorage 15s |
+| Export | MP4 720p / 1080p, progress theo phase |
 
-- **Resizable layout** — Media · Preview · Properties · Timeline
-- **Media upload** — Video / audio / image
-- **Text overlay** — Tiếng Việt có dấu (Noto Sans khi export)
-- **Timeline**
-  - Kéo thân clip → di chuyển thời gian
-  - Kéo cạnh → resize / trim
-  - **Kéo sang track khác** → đổi track (highlight khi drop)
-  - **Delete** xóa · **S** cắt tại playhead
-- **Undo / Redo** — Ctrl+Z / Ctrl+Y (hoặc Ctrl+Shift+Z), tối đa 50 bước
-- **Export MP4** — FFmpeg.wasm + progress bar chi tiết theo phase
-
-## Getting Started
+## Chạy
 
 ```bash
 npm install
 npm run dev
 ```
 
-Mở [http://localhost:3000](http://localhost:3000).
-
-> Dùng **Chrome / Edge**. Lần đầu export tải FFmpeg core + font Noto Sans.
+Chrome/Edge khuyến nghị (SharedArrayBuffer + WASM).
 
 ## Phím tắt
 
-| Phím | Chức năng |
-|------|-----------|
-| Ctrl+Z | Undo |
-| Ctrl+Y / Ctrl+Shift+Z | Redo |
-| Delete / Backspace | Xóa clip đang chọn |
-| S | Cắt clip tại playhead |
+- **Ctrl+Z / Ctrl+Y** — Undo / Redo  
+- **Ctrl+S** — Save project JSON  
+- **Delete** — Xóa clip  
+- **S** — Cắt tại playhead  
 
-## Export phases
+## Lưu project
 
-1. Tải FFmpeg core  
-2. Tải font Noto Sans (tiếng Việt)  
-3. Ghi media vào FS ảo  
-4. Dựng filter graph  
-5. Encode  
-6. Đóng gói & tải file  
+- **Save**: tải file `.cds.json` (cấu trúc timeline; blob media không đi kèm)  
+- **Autosave**: localStorage mỗi 15s (giữ blob URL trong cùng phiên)  
+- **Load**: mở file JSON — cần upload lại media nếu đã reload trang  
+
+Supabase cloud save có thể gắn thêm qua API route khi có credentials d-social.
 
 ## License
 

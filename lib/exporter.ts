@@ -7,14 +7,15 @@ import type {
   TimelineElement,
   MediaAsset,
   Track,
-  AspectRatio,
+  ExportResolution,
 } from "./types";
-import { ASPECT_RESOLUTIONS } from "./types";
+import { resolutionPixels } from "./types";
 
 export interface ExportOptions {
   format: "mp4" | "webm";
   fps: number;
   quality: "high" | "medium" | "low";
+  resolution: ExportResolution;
 }
 
 export interface ExportPayload {
@@ -46,9 +47,9 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   format: "mp4",
   fps: 30,
   quality: "high",
+  resolution: "1080p",
 };
 
-/** Noto Sans – supports Vietnamese diacritics */
 const FONT_URL =
   "https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Regular.ttf";
 const FONT_FS_NAME = "NotoSans-Regular.ttf";
@@ -57,16 +58,13 @@ let ffmpegInstance: FFmpeg | null = null;
 let loadingPromise: Promise<FFmpeg> | null = null;
 let fontLoaded = false;
 
-async function getFFmpeg(
-  onLog?: (msg: string) => void
-): Promise<FFmpeg> {
+async function getFFmpeg(onLog?: (msg: string) => void): Promise<FFmpeg> {
   if (ffmpegInstance?.loaded) return ffmpegInstance;
   if (loadingPromise) return loadingPromise;
 
   loadingPromise = (async () => {
     const ffmpeg = new FFmpeg();
     ffmpeg.on("log", ({ message }) => onLog?.(message));
-
     const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
     await ffmpeg.load({
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
@@ -75,7 +73,6 @@ async function getFFmpeg(
         "application/wasm"
       ),
     });
-
     ffmpegInstance = ffmpeg;
     return ffmpeg;
   })();
@@ -98,12 +95,8 @@ async function ensureFont(
     await ffmpeg.writeFile(FONT_FS_NAME, fontData);
     fontLoaded = true;
   } catch (err) {
-    console.warn("Font load failed, drawtext may miss Vietnamese glyphs", err);
+    console.warn("Font load failed", err);
   }
-}
-
-function resolutionFor(ratio: AspectRatio) {
-  return ASPECT_RESOLUTIONS[ratio] ?? ASPECT_RESOLUTIONS["9:16"];
 }
 
 function crfFor(quality: ExportOptions["quality"]) {
@@ -120,13 +113,54 @@ function escapeDrawtext(text: string): string {
     .replace(/\n/g, "\\n");
 }
 
+/** Build fade + alpha expression for overlay opacity over global time */
+function fadeEnableExpr(el: TimelineElement): string {
+  const s = el.startTime;
+  const e = el.startTime + el.duration;
+  const fi = el.fadeIn || 0;
+  const fo = el.fadeOut || 0;
+  const td =
+    el.transitionIn !== "none" ? el.transitionDuration || 0 : 0;
+  const inDur = Math.max(fi, td);
+  // enable window
+  return `between(t,${s.toFixed(3)},${e.toFixed(3)})`;
+}
+
+function alphaExpr(el: TimelineElement): string {
+  const s = el.startTime;
+  const e = el.startTime + el.duration;
+  const fi = el.fadeIn || 0;
+  const fo = el.fadeOut || 0;
+  const td =
+    el.transitionIn !== "none" && el.transitionIn !== "slide-left" && el.transitionIn !== "slide-right"
+      ? el.transitionDuration || 0
+      : 0;
+  const inDur = Math.max(fi, td);
+  const parts: string[] = [`${el.opacity ?? 1}`];
+  if (inDur > 0) {
+    // ramp 0→1 over inDur from start
+    parts.push(
+      `if(lt(t-${s.toFixed(3)}\\,${inDur.toFixed(3)})\\,(t-${s.toFixed(3)})/${inDur.toFixed(3)}\\,1)`
+    );
+  }
+  if (fo > 0) {
+    parts.push(
+      `if(gt(t\\,${(e - fo).toFixed(3)})\\,(${e.toFixed(3)}-t)/${fo.toFixed(3)}\\,1)`
+    );
+  }
+  return parts.join("*");
+}
+
 export async function exportProject(
   payload: ExportPayload,
   onProgress?: (p: ExportProgress) => void,
   onLog?: (msg: string) => void
 ): Promise<Blob> {
   const { project, media, elements, tracks, options } = payload;
-  const { width, height } = resolutionFor(project.aspectRatio);
+  const { width, height } = resolutionPixels(
+    project.aspectRatio,
+    options.resolution || "1080p"
+  );
   const duration = Math.max(project.duration, 1);
   const fps = options.fps || project.fps || 30;
 
@@ -151,16 +185,19 @@ export async function exportProject(
 
   const fileMap = new Map<string, string>();
   let fileIdx = 0;
-  const mediaToWrite = sorted.filter((el) => {
-    const a = media.find((m) => m.id === el.mediaId);
-    return a && a.type !== "text" && !fileMap.has(a.id);
-  });
 
   let written = 0;
+  const toWrite = sorted.filter((el) => {
+    const a = media.find((m) => m.id === el.mediaId);
+    return a && a.type !== "text";
+  });
+  const uniqueMedia = new Set<string>();
+
   for (const el of sorted) {
     const asset = media.find((m) => m.id === el.mediaId);
     if (!asset || asset.type === "text") continue;
     if (fileMap.has(asset.id)) continue;
+    if (!asset.src) continue;
 
     const ext =
       asset.type === "image"
@@ -176,19 +213,19 @@ export async function exportProject(
       const data = await fetchFile(asset.src);
       await ffmpeg.writeFile(filename, data);
       fileMap.set(asset.id, filename);
+      uniqueMedia.add(asset.id);
     } catch (err) {
       onLog?.(`Skip media ${asset.name}: ${err}`);
     }
     written++;
-    const pct =
-      15 +
-      Math.round(
-        (written / Math.max(mediaToWrite.length || 1, 1)) * 15
-      );
-    report("writing-media", pct, `Đã ghi ${written} file media…`);
+    report(
+      "writing-media",
+      15 + Math.round((written / Math.max(toWrite.length, 1)) * 15),
+      `Đã ghi ${uniqueMedia.size} file media…`
+    );
   }
 
-  report("building-graph", 32, "Đang dựng filter graph…");
+  report("building-graph", 32, `Đang dựng filter (${width}x${height})…`);
 
   const bgColor = (project.backgroundColor || "#000000").replace("#", "");
   const filterParts: string[] = [];
@@ -211,7 +248,6 @@ export async function exportProject(
   for (const el of visualEls) {
     const asset = media.find((m) => m.id === el.mediaId)!;
     if (asset.type === "text") continue;
-
     const fname = fileMap.get(asset.id);
     if (!fname) continue;
 
@@ -242,6 +278,7 @@ export async function exportProject(
       );
       const out = `tx${overlayIdx}`;
       const fontOpt = hasFont ? `:fontfile=${FONT_FS_NAME}` : "";
+      // approximate fade via alpha not available on drawtext easily — use enable window
       filterParts.push(
         `[${lastLabel}]drawtext=text='${txt}'${fontOpt}:fontsize=${fs}:fontcolor=0x${fc}:x=(w-text_w)/2+${el.x}:y=(h-text_h)/2+${el.y}:enable='between(t,${start},${end})'[${out}]`
       );
@@ -254,20 +291,45 @@ export async function exportProject(
     if (inIdx === undefined) continue;
 
     const scaled = `sc${overlayIdx}`;
+    const faded = `fd${overlayIdx}`;
     const out = `ov${overlayIdx}`;
 
+    // Scale + pad
+    let chain = `[${inIdx}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,format=yuva420p,setpts=PTS-STARTPTS+${start}/TB`;
+
+    // Fade in/out on the clip stream (relative to clip)
+    const fi = el.fadeIn || 0;
+    const fo = el.fadeOut || 0;
+    const td =
+      el.transitionIn === "fade" || el.transitionIn === "dissolve"
+        ? el.transitionDuration || 0
+        : 0;
+    const inFade = Math.max(fi, td);
+    if (inFade > 0) {
+      chain += `,fade=t=in:st=0:d=${inFade.toFixed(3)}:alpha=1`;
+    }
+    if (fo > 0) {
+      chain += `,fade=t=out:st=${Math.max(0, el.duration - fo).toFixed(3)}:d=${fo.toFixed(3)}:alpha=1`;
+    }
+    chain += `[${scaled}]`;
+    filterParts.push(chain);
+
+    // Slide offset approximation via overlay x
+    let ox = 0;
+    if (el.transitionIn === "slide-left" || el.transitionIn === "slide-right") {
+      // static mid-point not animated in simple graph — center
+      ox = 0;
+    }
+
     filterParts.push(
-      `[${inIdx}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,format=yuva420p,setpts=PTS-STARTPTS+${start}/TB[${scaled}]`
-    );
-    filterParts.push(
-      `[${lastLabel}][${scaled}]overlay=0:0:enable='between(t,${start},${end})'[${out}]`
+      `[${lastLabel}][${scaled}]overlay=${ox}:0:enable='${fadeEnableExpr(el)}'[${out}]`
     );
 
     lastLabel = out;
     overlayIdx++;
   }
 
-  report("encoding", 40, "Đang encode video…");
+  report("encoding", 40, `Đang encode ${options.resolution}…`);
 
   const filterComplex =
     filterParts.length > 0 ? filterParts.join(";") : null;
@@ -295,11 +357,10 @@ export async function exportProject(
     outName,
   ];
 
-  const onFfmpegProgress = ({ progress }: { progress: number }) => {
+  ffmpeg.on("progress", ({ progress }) => {
     const pct = 40 + Math.round(Math.min(1, Math.max(0, progress)) * 52);
     report("encoding", pct, `Đang encode… ${pct}%`);
-  };
-  ffmpeg.on("progress", onFfmpegProgress);
+  });
 
   try {
     await ffmpeg.exec(args);
