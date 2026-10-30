@@ -109,7 +109,7 @@ export default function MediaPanel() {
   };
 
   const handleAddText = () => {
-    const text = "Your text here";
+    const text = "Nhập chữ tại đây";
     const id = addTextAsset(text);
     placeOnTimeline(id, "text", 5, text, {
       text,
@@ -151,12 +151,12 @@ export default function MediaPanel() {
         className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg border border-gray-700 py-2 text-sm text-gray-300 transition hover:border-amber-500 hover:text-amber-400"
       >
         <Type size={16} />
-        Add Text Overlay
+        Thêm chữ / phụ đề
       </button>
 
       <div className="flex-1 space-y-1 overflow-y-auto">
         {media.length === 0 && (
-          <p className="py-8 text-center text-xs text-gray-600">No media yet</p>
+          <p className="py-8 text-center text-xs text-gray-600">Chưa có media</p>
         )}
         {media.map((item) => (
           <div

@@ -25,20 +25,42 @@ export interface ExportPayload {
   options: ExportOptions;
 }
 
+export type ExportPhase =
+  | "idle"
+  | "loading-core"
+  | "loading-font"
+  | "writing-media"
+  | "building-graph"
+  | "encoding"
+  | "finishing"
+  | "done"
+  | "error";
+
+export interface ExportProgress {
+  phase: ExportPhase;
+  percent: number;
+  message: string;
+}
+
 export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   format: "mp4",
   fps: 30,
   quality: "high",
 };
 
+/** Noto Sans – supports Vietnamese diacritics */
+const FONT_URL =
+  "https://cdn.jsdelivr.net/gh/googlefonts/noto-fonts@main/hinted/ttf/NotoSans/NotoSans-Regular.ttf";
+const FONT_FS_NAME = "NotoSans-Regular.ttf";
+
 let ffmpegInstance: FFmpeg | null = null;
 let loadingPromise: Promise<FFmpeg> | null = null;
+let fontLoaded = false;
 
 async function getFFmpeg(
   onLog?: (msg: string) => void
 ): Promise<FFmpeg> {
   if (ffmpegInstance?.loaded) return ffmpegInstance;
-
   if (loadingPromise) return loadingPromise;
 
   loadingPromise = (async () => {
@@ -61,6 +83,25 @@ async function getFFmpeg(
   return loadingPromise;
 }
 
+async function ensureFont(
+  ffmpeg: FFmpeg,
+  onProgress?: (p: ExportProgress) => void
+) {
+  if (fontLoaded) return;
+  onProgress?.({
+    phase: "loading-font",
+    percent: 12,
+    message: "Đang tải font Noto Sans (hỗ trợ tiếng Việt)…",
+  });
+  try {
+    const fontData = await fetchFile(FONT_URL);
+    await ffmpeg.writeFile(FONT_FS_NAME, fontData);
+    fontLoaded = true;
+  } catch (err) {
+    console.warn("Font load failed, drawtext may miss Vietnamese glyphs", err);
+  }
+}
+
 function resolutionFor(ratio: AspectRatio) {
   return ASPECT_RESOLUTIONS[ratio] ?? ASPECT_RESOLUTIONS["9:16"];
 }
@@ -71,19 +112,17 @@ function crfFor(quality: ExportOptions["quality"]) {
   return "28";
 }
 
-/**
- * Render project to a downloadable video Blob using FFmpeg.wasm.
- * Pipeline:
- *  1. Write each media file into the virtual FS
- *  2. Build a filter_complex that scales/overlays clips by time
- *  3. Encode to mp4/webm
- *
- * Limitation: pure client-side; long 4K timelines may be slow / OOM.
- * For production, prefer a server-side worker.
- */
+function escapeDrawtext(text: string): string {
+  return text
+    .replace(/\\/g, "\\\\")
+    .replace(/:/g, "\\:")
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, "\\n");
+}
+
 export async function exportProject(
   payload: ExportPayload,
-  onProgress?: (percent: number) => void,
+  onProgress?: (p: ExportProgress) => void,
   onLog?: (msg: string) => void
 ): Promise<Blob> {
   const { project, media, elements, tracks, options } = payload;
@@ -91,23 +130,33 @@ export async function exportProject(
   const duration = Math.max(project.duration, 1);
   const fps = options.fps || project.fps || 30;
 
-  onProgress?.(2);
-  const ffmpeg = await getFFmpeg(onLog);
-  onProgress?.(8);
+  const report = (phase: ExportPhase, percent: number, message: string) => {
+    onProgress?.({ phase, percent, message });
+  };
 
-  // Visible tracks only
+  report("loading-core", 3, "Đang tải FFmpeg core…");
+  const ffmpeg = await getFFmpeg(onLog);
+  report("loading-core", 10, "FFmpeg đã sẵn sàng");
+
+  await ensureFont(ffmpeg, onProgress);
+  report("writing-media", 15, "Đang ghi media vào bộ nhớ ảo…");
+
   const visibleTrackIds = new Set(
-    tracks.filter((t) => t.visible && !t.muted).map((t) => t.id)
+    tracks.filter((t) => t.visible).map((t) => t.id)
   );
 
   const sorted = [...elements]
     .filter((e) => visibleTrackIds.has(e.trackId))
     .sort((a, b) => a.startTime - b.startTime);
 
-  // Map mediaId -> filename in FS
   const fileMap = new Map<string, string>();
   let fileIdx = 0;
+  const mediaToWrite = sorted.filter((el) => {
+    const a = media.find((m) => m.id === el.mediaId);
+    return a && a.type !== "text" && !fileMap.has(a.id);
+  });
 
+  let written = 0;
   for (const el of sorted) {
     const asset = media.find((m) => m.id === el.mediaId);
     if (!asset || asset.type === "text") continue;
@@ -130,25 +179,25 @@ export async function exportProject(
     } catch (err) {
       onLog?.(`Skip media ${asset.name}: ${err}`);
     }
+    written++;
+    const pct =
+      15 +
+      Math.round(
+        (written / Math.max(mediaToWrite.length || 1, 1)) * 15
+      );
+    report("writing-media", pct, `Đã ghi ${written} file media…`);
   }
 
-  onProgress?.(25);
+  report("building-graph", 32, "Đang dựng filter graph…");
 
-  // Build a simple sequential overlay filter.
-  // Base: solid color background for full duration.
   const bgColor = (project.backgroundColor || "#000000").replace("#", "");
-  const inputs: string[] = [];
   const filterParts: string[] = [];
-
-  // Color base
-  // We'll use -f lavfi color as first input via args, not writeFile.
 
   const visualEls = sorted.filter((el) => {
     const a = media.find((m) => m.id === el.mediaId);
     return a && (a.type === "video" || a.type === "image" || a.type === "text");
   });
 
-  // Collect ffmpeg input args
   const inputArgs: string[] = [
     "-f",
     "lavfi",
@@ -156,17 +205,12 @@ export async function exportProject(
     `color=c=0x${bgColor}:s=${width}x${height}:d=${duration}:r=${fps}`,
   ];
 
-  // Index 0 = background
   let nextInput = 1;
   const elInputIndex = new Map<string, number>();
 
   for (const el of visualEls) {
     const asset = media.find((m) => m.id === el.mediaId)!;
-
-    if (asset.type === "text") {
-      // Text is drawn via drawtext filter — no extra input file
-      continue;
-    }
+    if (asset.type === "text") continue;
 
     const fname = fileMap.get(asset.id);
     if (!fname) continue;
@@ -180,9 +224,9 @@ export async function exportProject(
     nextInput++;
   }
 
-  // Build filter graph
   let lastLabel = "0:v";
   let overlayIdx = 0;
+  const hasFont = fontLoaded;
 
   for (const el of visualEls) {
     const asset = media.find((m) => m.id === el.mediaId)!;
@@ -190,16 +234,16 @@ export async function exportProject(
     const end = (el.startTime + el.duration).toFixed(3);
 
     if (asset.type === "text") {
-      const txt = (el.text ?? asset.text ?? "Text")
-        .replace(/\\/g, "\\\\")
-        .replace(/:/g, "\\:")
-        .replace(/'/g, "\\'");
+      const txt = escapeDrawtext(el.text ?? asset.text ?? "Text");
       const fs = el.fontSize ?? asset.fontSize ?? 48;
-      const fc = (el.fontColor ?? asset.fontColor ?? "#ffffff").replace("#", "");
+      const fc = (el.fontColor ?? asset.fontColor ?? "#ffffff").replace(
+        "#",
+        ""
+      );
       const out = `tx${overlayIdx}`;
-      // Center text by default; x/y are offsets from center in our model
+      const fontOpt = hasFont ? `:fontfile=${FONT_FS_NAME}` : "";
       filterParts.push(
-        `[${lastLabel}]drawtext=text='${txt}':fontsize=${fs}:fontcolor=0x${fc}:x=(w-text_w)/2+${el.x}:y=(h-text_h)/2+${el.y}:enable='between(t,${start},${end})'[${out}]`
+        `[${lastLabel}]drawtext=text='${txt}'${fontOpt}:fontsize=${fs}:fontcolor=0x${fc}:x=(w-text_w)/2+${el.x}:y=(h-text_h)/2+${el.y}:enable='between(t,${start},${end})'[${out}]`
       );
       lastLabel = out;
       overlayIdx++;
@@ -210,15 +254,11 @@ export async function exportProject(
     if (inIdx === undefined) continue;
 
     const scaled = `sc${overlayIdx}`;
-    const timed = `tm${overlayIdx}`;
     const out = `ov${overlayIdx}`;
 
-    // Scale to fit canvas while keeping aspect
     filterParts.push(
       `[${inIdx}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,format=yuva420p,setpts=PTS-STARTPTS+${start}/TB[${scaled}]`
     );
-
-    // Overlay with enable time window
     filterParts.push(
       `[${lastLabel}][${scaled}]overlay=0:0:enable='between(t,${start},${end})'[${out}]`
     );
@@ -227,7 +267,7 @@ export async function exportProject(
     overlayIdx++;
   }
 
-  onProgress?.(40);
+  report("encoding", 40, "Đang encode video…");
 
   const filterComplex =
     filterParts.length > 0 ? filterParts.join(";") : null;
@@ -255,16 +295,17 @@ export async function exportProject(
     outName,
   ];
 
-  ffmpeg.on("progress", ({ progress }) => {
-    // progress is 0–1
-    onProgress?.(40 + Math.round(progress * 55));
-  });
+  const onFfmpegProgress = ({ progress }: { progress: number }) => {
+    const pct = 40 + Math.round(Math.min(1, Math.max(0, progress)) * 52);
+    report("encoding", pct, `Đang encode… ${pct}%`);
+  };
+  ffmpeg.on("progress", onFfmpegProgress);
 
   try {
     await ffmpeg.exec(args);
   } catch (err) {
     onLog?.(`FFmpeg exec error: ${err}`);
-    // Fallback: solid color short video so user still gets a file
+    report("encoding", 70, "Thử encode fallback…");
     await ffmpeg.exec([
       "-f",
       "lavfi",
@@ -280,14 +321,13 @@ export async function exportProject(
     ]);
   }
 
-  onProgress?.(96);
+  report("finishing", 95, "Đang đóng gói file…");
 
   const data = await ffmpeg.readFile(outName);
   const mime =
     options.format === "webm" ? "video/webm" : "video/mp4";
   const blob = new Blob([data], { type: mime });
 
-  // Cleanup FS (best-effort)
   try {
     await ffmpeg.deleteFile(outName);
     for (const fname of fileMap.values()) {
@@ -297,7 +337,7 @@ export async function exportProject(
     /* ignore */
   }
 
-  onProgress?.(100);
+  report("done", 100, "Hoàn tất!");
   return blob;
 }
 

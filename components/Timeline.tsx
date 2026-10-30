@@ -3,11 +3,11 @@
 import { useEditorStore } from "@/lib/store";
 import { formatTime, cn } from "@/lib/utils";
 import { Plus, Volume2, VolumeX, Eye, EyeOff } from "lucide-react";
-import { useRef, useCallback, useState } from "react";
+import { useRef, useCallback, useState, useEffect } from "react";
 
 const PIXELS_PER_SECOND = 40;
 const TRACK_HEIGHT = 48;
-const EDGE_HIT = 8; // px for resize handles
+const EDGE_HIT = 8;
 
 type DragMode = "move" | "resize-start" | "resize-end" | null;
 
@@ -28,18 +28,45 @@ export default function Timeline() {
   const moveElement = useEditorStore((s) => s.moveElement);
   const resizeElement = useEditorStore((s) => s.resizeElement);
   const recalculateDuration = useEditorStore((s) => s.recalculateDuration);
+  const pushHistory = useEditorStore((s) => s.pushHistory);
+  const undo = useEditorStore((s) => s.undo);
+  const redo = useEditorStore((s) => s.redo);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const timelineWidth = Math.max(project.duration * PIXELS_PER_SECOND + 200, 800);
+  const tracksAreaRef = useRef<HTMLDivElement>(null);
+  const timelineWidth = Math.max(
+    project.duration * PIXELS_PER_SECOND + 200,
+    800
+  );
 
-  // Drag state
   const [drag, setDrag] = useState<{
     id: string;
     mode: DragMode;
     startX: number;
+    startY: number;
     origStart: number;
     origDuration: number;
+    origTrackId: string;
   } | null>(null);
+
+  const [dropTrackId, setDropTrackId] = useState<string | null>(null);
+
+  // Global keyboard: Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      if (e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (e.key === "y" || (e.key === "z" && e.shiftKey)) {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
 
   const handleRulerClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -51,11 +78,22 @@ export default function Timeline() {
     [seek, drag]
   );
 
+  const trackIdAtY = (clientY: number): string | null => {
+    const area = tracksAreaRef.current;
+    if (!area) return null;
+    const rect = area.getBoundingClientRect();
+    const y = clientY - rect.top;
+    const idx = Math.floor(y / TRACK_HEIGHT);
+    if (idx < 0 || idx >= tracks.length) return null;
+    return tracks[idx].id;
+  };
+
   const onPointerDownClip = (
     e: React.PointerEvent,
     elId: string,
     startTime: number,
-    duration: number
+    duration: number,
+    trackId: string
   ) => {
     e.stopPropagation();
     e.preventDefault();
@@ -76,13 +114,18 @@ export default function Timeline() {
         : [elId]
     );
 
+    // One history entry for the whole drag gesture
+    pushHistory();
+
     target.setPointerCapture(e.pointerId);
     setDrag({
       id: elId,
       mode,
       startX: e.clientX,
+      startY: e.clientY,
       origStart: startTime,
       origDuration: duration,
+      origTrackId: trackId,
     });
   };
 
@@ -92,7 +135,13 @@ export default function Timeline() {
     const dt = dx / PIXELS_PER_SECOND;
 
     if (drag.mode === "move") {
-      moveElement(drag.id, Math.max(0, drag.origStart + dt));
+      const targetTrack = trackIdAtY(e.clientY);
+      setDropTrackId(targetTrack);
+      moveElement(
+        drag.id,
+        Math.max(0, drag.origStart + dt),
+        targetTrack ?? undefined
+      );
     } else if (drag.mode === "resize-start") {
       resizeElement(drag.id, "start", drag.origStart + dt);
     } else if (drag.mode === "resize-end") {
@@ -108,6 +157,7 @@ export default function Timeline() {
     if (drag) {
       recalculateDuration();
       setDrag(null);
+      setDropTrackId(null);
     }
   };
 
@@ -131,7 +181,6 @@ export default function Timeline() {
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      {/* Toolbar */}
       <div className="flex items-center gap-2 border-b border-gray-800 px-3 py-1.5">
         <span className="text-xs font-medium text-gray-400">Timeline</span>
         <button
@@ -153,18 +202,20 @@ export default function Timeline() {
           <Plus size={12} /> Audio
         </button>
         <span className="text-[10px] text-gray-600">
-          Drag = move · Edge = resize · Del · S = split
+          Drag = move/đổi track · Edge = resize · Ctrl+Z/Y · Del · S
         </span>
       </div>
 
       <div className="flex min-h-0 flex-1">
-        {/* Track labels */}
         <div className="w-36 shrink-0 border-r border-gray-800">
           <div className="h-6 border-b border-gray-800" />
           {tracks.map((track) => (
             <div
               key={track.id}
-              className="flex items-center gap-1 border-b border-gray-800/50 px-2"
+              className={cn(
+                "flex items-center gap-1 border-b border-gray-800/50 px-2 transition-colors",
+                dropTrackId === track.id && "bg-blue-900/40"
+              )}
               style={{ height: TRACK_HEIGHT }}
             >
               <span className="flex-1 truncate text-xs text-gray-300">
@@ -186,7 +237,6 @@ export default function Timeline() {
           ))}
         </div>
 
-        {/* Scrollable timeline */}
         <div ref={scrollRef} className="min-w-0 flex-1 overflow-auto">
           <div
             className="relative h-6 cursor-pointer border-b border-gray-800 bg-gray-950"
@@ -208,8 +258,11 @@ export default function Timeline() {
             )}
           </div>
 
-          <div className="relative" style={{ width: timelineWidth }}>
-            {/* Playhead */}
+          <div
+            ref={tracksAreaRef}
+            className="relative"
+            style={{ width: timelineWidth }}
+          >
             <div
               className="pointer-events-none absolute top-0 z-20 w-px bg-red-500"
               style={{
@@ -223,7 +276,10 @@ export default function Timeline() {
             {tracks.map((track) => (
               <div
                 key={track.id}
-                className="relative border-b border-gray-800/50 bg-gray-950/50"
+                className={cn(
+                  "relative border-b border-gray-800/50 bg-gray-950/50 transition-colors",
+                  dropTrackId === track.id && "bg-blue-950/50"
+                )}
                 style={{ height: TRACK_HEIGHT }}
               >
                 {elements
@@ -243,7 +299,8 @@ export default function Timeline() {
                             e,
                             el.id,
                             el.startTime,
-                            el.duration
+                            el.duration,
+                            el.trackId
                           )
                         }
                         className={cn(
@@ -255,7 +312,7 @@ export default function Timeline() {
                               : "bg-blue-600/90",
                           selected &&
                             "ring-2 ring-white ring-offset-1 ring-offset-gray-900",
-                          drag?.id === el.id && "opacity-80"
+                          drag?.id === el.id && "opacity-80 z-10"
                         )}
                         style={{
                           left: el.startTime * PIXELS_PER_SECOND,
@@ -265,9 +322,8 @@ export default function Timeline() {
                           ),
                           height: TRACK_HEIGHT - 8,
                         }}
-                        title={`${asset?.name ?? el.name ?? "Clip"} · drag to move, edges to resize`}
+                        title="Kéo để di chuyển / đổi track · Kéo cạnh để resize"
                       >
-                        {/* Resize handles visual */}
                         <span className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize bg-white/20" />
                         <span className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize bg-white/20" />
                         <span className="truncate pl-1">

@@ -12,11 +12,31 @@ import type {
   AspectRatio,
 } from "./types";
 
+/** Snapshot of editable timeline state for undo/redo */
+interface HistorySnapshot {
+  media: MediaAsset[];
+  tracks: Track[];
+  elements: TimelineElement[];
+  project: Project;
+  selectedElementIds: string[];
+}
+
+const MAX_HISTORY = 50;
+
 interface EditorStore extends PlaybackState, SelectionState {
   project: Project;
   media: MediaAsset[];
   tracks: Track[];
   elements: TimelineElement[];
+
+  // History
+  past: HistorySnapshot[];
+  future: HistorySnapshot[];
+  pushHistory: () => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
 
   setProjectName: (name: string) => void;
   setAspectRatio: (ratio: AspectRatio) => void;
@@ -34,6 +54,7 @@ interface EditorStore extends PlaybackState, SelectionState {
   addElement: (el: Omit<TimelineElement, "id">) => string;
   removeElements: (ids: string[]) => void;
   updateElement: (id: string, patch: Partial<TimelineElement>) => void;
+  /** Move in time and optionally to another track */
   moveElement: (id: string, startTime: number, trackId?: string) => void;
   resizeElement: (
     id: string,
@@ -53,6 +74,22 @@ interface EditorStore extends PlaybackState, SelectionState {
 
   getSelectedElements: () => TimelineElement[];
   recalculateDuration: () => void;
+}
+
+function snapshot(s: {
+  media: MediaAsset[];
+  tracks: Track[];
+  elements: TimelineElement[];
+  project: Project;
+  selectedElementIds: string[];
+}): HistorySnapshot {
+  return {
+    media: structuredClone(s.media),
+    tracks: structuredClone(s.tracks),
+    elements: structuredClone(s.elements),
+    project: structuredClone(s.project),
+    selectedElementIds: [...s.selectedElementIds],
+  };
 }
 
 const defaultTracks: Track[] = [
@@ -102,32 +139,86 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   volume: 1,
   selectedElementIds: [],
   selectedTrackId: null,
+  past: [],
+  future: [],
+
+  pushHistory: () => {
+    const s = get();
+    const snap = snapshot(s);
+    set({
+      past: [...s.past.slice(-(MAX_HISTORY - 1)), snap],
+      future: [],
+    });
+  },
+
+  undo: () => {
+    const s = get();
+    if (s.past.length === 0) return;
+    const previous = s.past[s.past.length - 1];
+    const current = snapshot(s);
+    set({
+      past: s.past.slice(0, -1),
+      future: [current, ...s.future].slice(0, MAX_HISTORY),
+      media: previous.media,
+      tracks: previous.tracks,
+      elements: previous.elements,
+      project: previous.project,
+      selectedElementIds: previous.selectedElementIds,
+    });
+  },
+
+  redo: () => {
+    const s = get();
+    if (s.future.length === 0) return;
+    const next = s.future[0];
+    const current = snapshot(s);
+    set({
+      future: s.future.slice(1),
+      past: [...s.past, current].slice(-MAX_HISTORY),
+      media: next.media,
+      tracks: next.tracks,
+      elements: next.elements,
+      project: next.project,
+      selectedElementIds: next.selectedElementIds,
+    });
+  },
+
+  canUndo: () => get().past.length > 0,
+  canRedo: () => get().future.length > 0,
 
   setProjectName: (name) =>
     set((s) => ({ project: { ...s.project, name } })),
 
-  setAspectRatio: (ratio) =>
-    set((s) => ({ project: { ...s.project, aspectRatio: ratio } })),
+  setAspectRatio: (ratio) => {
+    get().pushHistory();
+    set((s) => ({ project: { ...s.project, aspectRatio: ratio } }));
+  },
 
-  setBackgroundColor: (color) =>
-    set((s) => ({ project: { ...s.project, backgroundColor: color } })),
+  setBackgroundColor: (color) => {
+    get().pushHistory();
+    set((s) => ({ project: { ...s.project, backgroundColor: color } }));
+  },
 
   addMedia: (asset) => {
+    get().pushHistory();
     const id = nanoid();
     set((s) => ({ media: [...s.media, { ...asset, id }] }));
     return id;
   },
 
-  removeMedia: (id) =>
+  removeMedia: (id) => {
+    get().pushHistory();
     set((s) => ({
       media: s.media.filter((m) => m.id !== id),
       elements: s.elements.filter((e) => e.mediaId !== id),
       selectedElementIds: s.selectedElementIds.filter(
         (eid) => s.elements.find((e) => e.id === eid)?.mediaId !== id
       ),
-    })),
+    }));
+  },
 
-  addTextAsset: (text = "Your text here") => {
+  addTextAsset: (text = "Nhập chữ tại đây") => {
+    get().pushHistory();
     const id = nanoid();
     set((s) => ({
       media: [
@@ -141,7 +232,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           text,
           fontSize: 48,
           fontColor: "#ffffff",
-          fontFamily: "Arial",
+          fontFamily: "Noto Sans",
         },
       ],
     }));
@@ -149,6 +240,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   addTrack: (type) => {
+    get().pushHistory();
     const id = nanoid();
     const count = get().tracks.filter((t) => t.type === type).length + 1;
     const label =
@@ -170,27 +262,34 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     return id;
   },
 
-  removeTrack: (id) =>
+  removeTrack: (id) => {
+    get().pushHistory();
     set((s) => ({
       tracks: s.tracks.filter((t) => t.id !== id),
       elements: s.elements.filter((e) => e.trackId !== id),
-    })),
+    }));
+  },
 
-  toggleTrackMute: (id) =>
+  toggleTrackMute: (id) => {
+    get().pushHistory();
     set((s) => ({
       tracks: s.tracks.map((t) =>
         t.id === id ? { ...t, muted: !t.muted } : t
       ),
-    })),
+    }));
+  },
 
-  toggleTrackVisibility: (id) =>
+  toggleTrackVisibility: (id) => {
+    get().pushHistory();
     set((s) => ({
       tracks: s.tracks.map((t) =>
         t.id === id ? { ...t, visible: !t.visible } : t
       ),
-    })),
+    }));
+  },
 
   addElement: (el) => {
+    get().pushHistory();
     const id = nanoid();
     set((s) => {
       const elements = [...s.elements, { ...el, id }];
@@ -206,22 +305,27 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     return id;
   },
 
-  removeElements: (ids) =>
+  removeElements: (ids) => {
+    get().pushHistory();
     set((s) => ({
       elements: s.elements.filter((e) => !ids.includes(e.id)),
       selectedElementIds: s.selectedElementIds.filter(
         (id) => !ids.includes(id)
       ),
-    })),
+    }));
+  },
 
-  updateElement: (id, patch) =>
+  updateElement: (id, patch) => {
+    get().pushHistory();
     set((s) => ({
       elements: s.elements.map((e) =>
         e.id === id ? { ...e, ...patch } : e
       ),
-    })),
+    }));
+  },
 
-  moveElement: (id, startTime, trackId) =>
+  moveElement: (id, startTime, trackId) => {
+    // During live drag we call this often — history is pushed once on pointer down
     set((s) => ({
       elements: s.elements.map((e) =>
         e.id === id
@@ -232,7 +336,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             }
           : e
       ),
-    })),
+    }));
+  },
 
   resizeElement: (id, edge, newTime) => {
     const el = get().elements.find((e) => e.id === id);
@@ -272,6 +377,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const relative = atTime - el.startTime;
     if (relative <= 0.1 || relative >= el.duration - 0.1) return;
 
+    get().pushHistory();
     const leftDuration = relative;
     const rightDuration = el.duration - relative;
 

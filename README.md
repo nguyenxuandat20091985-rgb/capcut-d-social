@@ -1,21 +1,21 @@
 # CapCut D-Social
 
-Social-first video editor built with **Next.js**, **TypeScript**, **Tailwind**, **Zustand**, and **FFmpeg.wasm**.
+Social-first video editor — Next.js · TypeScript · Tailwind · Zustand · FFmpeg.wasm.
 
 Inspired by [OpenCut](https://github.com/OpenCut-app/OpenCut).
 
 ## Features
 
 - **Resizable layout** — Media · Preview · Properties · Timeline
-- **Media upload** — Video / audio / image → auto-placed on timeline
-- **Text overlay** — Add subtitle-style text clips with font size & color
-- **Drag & drop timeline**
-  - Drag clip body → move in time
-  - Drag left/right edge → resize / trim
-  - **Delete** remove · **S** split at playhead
-- **Multi-track** — Video, Text, Audio (mute / visibility)
-- **Playback** — Play / Pause with live preview
-- **Real export** — FFmpeg.wasm → downloadable **MP4**
+- **Media upload** — Video / audio / image
+- **Text overlay** — Tiếng Việt có dấu (Noto Sans khi export)
+- **Timeline**
+  - Kéo thân clip → di chuyển thời gian
+  - Kéo cạnh → resize / trim
+  - **Kéo sang track khác** → đổi track (highlight khi drop)
+  - **Delete** xóa · **S** cắt tại playhead
+- **Undo / Redo** — Ctrl+Z / Ctrl+Y (hoặc Ctrl+Shift+Z), tối đa 50 bước
+- **Export MP4** — FFmpeg.wasm + progress bar chi tiết theo phase
 
 ## Getting Started
 
@@ -24,39 +24,27 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Mở [http://localhost:3000](http://localhost:3000).
 
-> **Note:** First export downloads FFmpeg core (~25MB). Use **Chrome / Edge** for best WASM + SharedArrayBuffer support (COOP/COEP headers are set in `next.config.js`).
+> Dùng **Chrome / Edge**. Lần đầu export tải FFmpeg core + font Noto Sans.
 
-## Workflow
+## Phím tắt
 
-1. **Upload** video/image or click **Add Text Overlay**
-2. **Drag** clips on the timeline to arrange
-3. Select a clip → tweak **Properties** (text, opacity, scale…)
-4. Hit **Export MP4** → file downloads when encoding finishes
+| Phím | Chức năng |
+|------|-----------|
+| Ctrl+Z | Undo |
+| Ctrl+Y / Ctrl+Shift+Z | Redo |
+| Delete / Backspace | Xóa clip đang chọn |
+| S | Cắt clip tại playhead |
 
-## Project Structure
+## Export phases
 
-```
-components/
-  Editor.tsx          # Resizable shell
-  EditorHeader.tsx    # Play + Export
-  Preview.tsx
-  Timeline.tsx        # Drag / resize / split
-  MediaPanel.tsx      # Upload + Text
-  PropertiesPanel.tsx
-lib/
-  types.ts
-  store.ts
-  exporter.ts         # FFmpeg.wasm pipeline
-  utils.ts
-```
-
-## Export notes
-
-- Client-side only — fine for short social clips (15–60s)
-- Long / many 4K sources may be slow or hit memory limits
-- For production scale, move rendering to a worker / server
+1. Tải FFmpeg core  
+2. Tải font Noto Sans (tiếng Việt)  
+3. Ghi media vào FS ảo  
+4. Dựng filter graph  
+5. Encode  
+6. Đóng gói & tải file  
 
 ## License
 
