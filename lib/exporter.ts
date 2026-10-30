@@ -344,6 +344,18 @@ export async function exportProject(
     // Scale + pad
     let chain = `[${inIdx}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,format=yuva420p,setpts=PTS-STARTPTS+${start}/TB`;
 
+    // Apply non-destructive color controls consistently with the live Preview.
+    const brightness = Math.max(0, Math.min(2, el.brightness ?? 1));
+    const contrast = Math.max(0.5, Math.min(2, el.contrast ?? 1));
+    const saturation = Math.max(0, Math.min(3, el.saturation ?? 1));
+    const hue = Math.max(-180, Math.min(180, el.hue ?? 0));
+    const blur = Math.max(0, Math.min(12, el.blur ?? 0));
+    if (brightness !== 1 || contrast !== 1 || saturation !== 1) {
+      chain += `,eq=brightness=${(brightness - 1).toFixed(3)}:contrast=${contrast.toFixed(3)}:saturation=${saturation.toFixed(3)}`;
+    }
+    if (hue !== 0) chain += `,hue=h=${hue.toFixed(1)}`;
+    if (blur > 0) chain += `,gblur=sigma=${Math.max(0.1, blur).toFixed(2)}`;
+
     // Fade in/out on the clip stream (relative to clip)
     const fi = el.fadeIn || 0;
     const fo = el.fadeOut || 0;
