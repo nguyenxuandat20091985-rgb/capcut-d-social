@@ -69,7 +69,7 @@ GitHub Actions workflow `.github/workflows/ci.yml` chạy `npm install` và `npm
 
 ## Kiểm thử trên Android
 
-Xem [CHECKLIST-ANDROID.md](docs/CHECKLIST-ANDROID.md). Chỉ đánh dấu đạt sau khi thực hiện trên thiết bị thật; CI build xanh không thay thế kiểm thử playback/touch/export.
+Xem [ANDROID-CHECKLIST.md](ANDROID-CHECKLIST.md). Chỉ đánh dấu đạt sau khi thực hiện trên thiết bị thật; CI build xanh không thay thế kiểm thử playback/touch/export.
 
 ## Phím tắt
 
