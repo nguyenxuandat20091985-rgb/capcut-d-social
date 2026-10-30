@@ -61,7 +61,9 @@ export default function Preview() {
         (el) =>
           currentTime >= el.startTime &&
           currentTime < el.startTime + el.duration &&
-          tracks.find((t) => t.id === el.trackId)?.visible !== false
+          tracks.find((t) => t.id === el.trackId)?.visible !== false &&
+          !(media.find((m) => m.id === el.mediaId)?.type === "audio" &&
+            tracks.find((t) => t.id === el.trackId)?.muted === true)
       ),
     [elements, currentTime, tracks]
   );
@@ -150,6 +152,19 @@ export default function Preview() {
                 );
               }
 
+              if (asset.type === "audio") {
+                const track = tracks.find((t) => t.id === el.trackId);
+                return (
+                  <AudioLayer
+                    key={el.id}
+                    src={asset.src}
+                    localTime={local + (el.trimStart || 0)}
+                    isPlaying={isPlaying}
+                    volume={Math.max(0, Math.min(1, (el.volume ?? 1) * (track?.volume ?? 1)))}
+                  />
+                );
+              }
+
               return null;
             })
           )}
@@ -225,4 +240,43 @@ function VideoLayer({
       preload="auto"
     />
   );
+}
+
+
+/** Audio tracks follow the same timeline clock as video and respect clip/track volume. */
+function AudioLayer({
+  src,
+  localTime,
+  isPlaying,
+  volume,
+}: {
+  src: string;
+  localTime: number;
+  isPlaying: boolean;
+  volume: number;
+}) {
+  const ref = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    const audio = ref.current;
+    if (!audio) return;
+    if (Math.abs(audio.currentTime - localTime) > 0.25) {
+      audio.currentTime = Math.max(0, localTime);
+    }
+  }, [localTime]);
+
+  useEffect(() => {
+    const audio = ref.current;
+    if (!audio) return;
+    audio.volume = volume;
+    if (isPlaying) {
+      audio.play().catch((error) => {
+        console.warn("Audio preview could not start; tap Play again if the browser blocked autoplay.", error);
+      });
+    } else {
+      audio.pause();
+    }
+  }, [isPlaying, volume]);
+
+  return <audio ref={ref} src={src} preload="auto" />;
 }
