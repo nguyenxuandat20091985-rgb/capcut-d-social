@@ -62,7 +62,7 @@ async function getFFmpeg(onLog?: (msg: string) => void): Promise<FFmpeg> {
   if (ffmpegInstance?.loaded) return ffmpegInstance;
   if (loadingPromise) return loadingPromise;
 
-  loadingPromise = (async () => {
+  const pending = (async () => {
     const ffmpeg = new FFmpeg();
     ffmpeg.on("log", ({ message }) => onLog?.(message));
     const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
@@ -77,6 +77,13 @@ async function getFFmpeg(onLog?: (msg: string) => void): Promise<FFmpeg> {
     return ffmpeg;
   })();
 
+  // A failed CDN/network load must not poison every later retry with the same
+  // rejected promise. Let the next Export attempt start a fresh load.
+  loadingPromise = pending.catch((error) => {
+    loadingPromise = null;
+    ffmpegInstance = null;
+    throw error;
+  });
   return loadingPromise;
 }
 
@@ -97,6 +104,34 @@ async function ensureFont(
   } catch (err) {
     console.warn("Font load failed", err);
   }
+}
+
+function mediaExtension(asset: MediaAsset): string {
+  const mime = (asset.mimeType || "").toLowerCase().split(";")[0];
+  const byMime: Record<string, string> = {
+    "video/mp4": "mp4",
+    "video/quicktime": "mov",
+    "video/webm": "webm",
+    "video/x-m4v": "m4v",
+    "audio/mpeg": "mp3",
+    "audio/mp4": "m4a",
+    "audio/aac": "aac",
+    "audio/wav": "wav",
+    "audio/x-wav": "wav",
+    "audio/ogg": "ogg",
+    "audio/flac": "flac",
+    "audio/webm": "webm",
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "image/avif": "avif",
+  };
+  if (byMime[mime]) return byMime[mime];
+  const extension = asset.name.toLowerCase().match(/\\.([a-z0-9]{2,5})$/)?.[1];
+  const allowed = new Set(["mp4", "mov", "m4v", "webm", "mp3", "m4a", "aac", "wav", "ogg", "flac", "jpg", "jpeg", "png", "webp", "gif", "avif"]);
+  if (extension && allowed.has(extension)) return extension === "jpeg" ? "jpg" : extension;
+  return asset.type === "audio" ? "mp3" : asset.type === "image" ? "jpg" : "mp4";
 }
 
 function crfFor(quality: ExportOptions["quality"]) {
@@ -199,14 +234,7 @@ export async function exportProject(
     if (fileMap.has(asset.id)) continue;
     if (!asset.src) continue;
 
-    const ext =
-      asset.type === "image"
-        ? asset.mimeType?.includes("png")
-          ? "png"
-          : "jpg"
-        : asset.type === "audio"
-          ? "mp3"
-          : "mp4";
+    const ext = mediaExtension(asset);
 
     const filename = `in_${fileIdx++}.${ext}`;
     try {
