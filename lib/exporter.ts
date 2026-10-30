@@ -320,26 +320,35 @@ export async function exportProject(
 
     if (asset.type === "text") {
       const txt = escapeDrawtext(el.text ?? asset.text ?? "Text");
-      const fs = (el.fontSize ?? asset.fontSize ?? 48) * Math.max(0.1, Math.min(3, el.scale ?? 1));
+      const fs = el.fontSize ?? asset.fontSize ?? 48;
       const fc = (el.fontColor ?? asset.fontColor ?? "#ffffff").replace("#", "");
       const textOpacity = Math.max(0, Math.min(1, el.opacity ?? 1));
+      const textScale = Math.max(0.1, Math.min(3, el.scale ?? 1));
+      const textRotation = (el.rotation ?? 0) * Math.PI / 180;
       const textX = Math.max(-100, Math.min(100, el.x ?? 0));
       const textY = Math.max(-100, Math.min(100, el.y ?? 0));
-      const textRotation = (el.rotation ?? 0) * Math.PI / 180;
       const slideDuration = Math.max(0, Math.min(el.duration, el.transitionDuration ?? 0.5));
       const slideDirection = el.transitionIn === "slide-left" ? 1 : el.transitionIn === "slide-right" ? -1 : 0;
-      const textXExpr = slideDirection !== 0 && slideDuration > 0
-        ? `(w-text_w)/2+(${textX}/100)*w+${slideDirection}*w*(1-(t-${start})/${slideDuration.toFixed(3)})`
-        : `(w-text_w)/2+(${textX}/100)*w`;
       const textFadeIn = Math.max(0, Math.min(el.duration, el.fadeIn ?? 0));
       const textFadeOut = Math.max(0, Math.min(el.duration, el.fadeOut ?? 0));
       let textAlpha = textOpacity.toFixed(3);
       if (textFadeIn > 0) textAlpha += `*if(lt(t,${start}+${textFadeIn.toFixed(3)}),max(0,(t-${start})/${textFadeIn.toFixed(3)}),1)`;
       if (textFadeOut > 0) textAlpha += `*if(gt(t,${end}-${textFadeOut.toFixed(3)}),max(0,(${end}-t)/${textFadeOut.toFixed(3)}),1)`;
+      const textLayer = `txtlayer${overlayIdx}`;
       const out = `tx${overlayIdx}`;
       const fontOpt = hasFont ? `:fontfile=${FONT_FS_NAME}` : "";
+      let textChain = `color=c=black@0:s=${width}x${height}:d=${duration}:r=${fps},format=yuva420p,drawtext=text='${txt}'${fontOpt}:fontsize=${fs}:fontcolor=0x${fc}:alpha='${textAlpha}':x=(w-text_w)/2:y=(h-text_h)/2`;
+      if (textScale !== 1) textChain += `,scale=w='max(1,iw*${textScale.toFixed(3)})':h='max(1,ih*${textScale.toFixed(3)})'`;
+      if (textRotation !== 0) textChain += `,rotate=${textRotation.toFixed(5)}:ow=rotw(iw):oh=roth(ih):c=black@0`;
+      filterParts.push(`${textChain}[${textLayer}]`);
+
+      const baseTextX = `(W-w)/2+(${textX}/100)*W`;
+      const textOverlayX = slideDirection !== 0 && slideDuration > 0
+        ? `if(lt(t,${start}+${slideDuration.toFixed(3)}),${baseTextX}+${slideDirection}*W*(1-(t-${start})/${slideDuration.toFixed(3)}),${baseTextX})`
+        : baseTextX;
+      const textOverlayY = `(H-h)/2+(${textY}/100)*H`;
       filterParts.push(
-        `[${lastLabel}]drawtext=text='${txt}'${fontOpt}:fontsize=${fs}:fontcolor=0x${fc}:alpha='${textAlpha}':x='${textXExpr}':y=(h-text_h)/2+(${textY}/100)*h:rotate=${textRotation.toFixed(5)}:enable='between(t,${start},${end})'[${out}]`
+        `[${lastLabel}][${textLayer}]overlay=x='${textOverlayX}':y='${textOverlayY}':enable='between(t,${start},${end})'[${out}]`
       );
       lastLabel = out;
       overlayIdx++;
