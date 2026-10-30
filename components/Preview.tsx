@@ -3,6 +3,7 @@
 import { useEditorStore } from "@/lib/store";
 import { formatTime } from "@/lib/utils";
 import { fadedOpacity, slideOffset } from "@/lib/fade";
+import { getMotionAtTime } from "@/lib/keyframes";
 import { useEffect, useRef, useMemo } from "react";
 import { Play, Pause } from "lucide-react";
 
@@ -105,6 +106,7 @@ export default function Preview() {
               const asset = media.find((m) => m.id === el.mediaId);
               if (!asset) return null;
               const local = currentTime - el.startTime;
+              const motion = getMotionAtTime(el, local);
               const opacity = fadedOpacity(el, local);
               const slideX = slideOffset(el, local, stageW);
 
@@ -118,7 +120,7 @@ export default function Preview() {
                     className="pointer-events-none absolute inset-0 flex items-center justify-center"
                     style={{
                       opacity,
-                      transform: `translate(${el.x + slideX}%, ${el.y}%) scale(${el.scale}) rotate(${el.rotation}deg)`,
+                      transform: `translate(${motion.x + slideX}%, ${motion.y}%) scale(${motion.scale}) rotate(${el.rotation}deg)`,
                     }}
                   >
                     <span
@@ -149,7 +151,7 @@ export default function Preview() {
                     style={{
                       opacity,
                       filter: clipCssFilter(el),
-                      transform: `translate(${el.x + slideX}%, ${el.y}%) scale(${el.scale}) rotate(${el.rotation}deg)`,
+                      transform: `translate(${motion.x + slideX}%, ${motion.y}%) scale(${motion.scale}) rotate(${el.rotation}deg)`,
                     }}
                     draggable={false}
                   />
@@ -170,7 +172,7 @@ export default function Preview() {
                     opacity={opacity}
                     style={{
                       filter: clipCssFilter(el),
-                      transform: `translate(${el.x + slideX}%, ${el.y}%) scale(${el.scale}) rotate(${el.rotation}deg)`,
+                      transform: `translate(${motion.x + slideX}%, ${motion.y}%) scale(${motion.scale}) rotate(${el.rotation}deg)`,
                     }}
                   />
                 );
