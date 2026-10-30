@@ -2,18 +2,21 @@ export type MediaType = "video" | "audio" | "image" | "text";
 
 export type AspectRatio = "9:16" | "16:9" | "1:1" | "4:5";
 
+export type TransitionType = "none" | "dissolve" | "fade" | "slide-left" | "slide-right";
+
+export type ExportResolution = "720p" | "1080p";
+
 export interface MediaAsset {
   id: string;
   type: MediaType;
   name: string;
-  src: string; // object URL or empty for pure text assets
-  duration: number; // seconds (0 for images default handled elsewhere)
+  src: string;
+  duration: number;
   width?: number;
   height?: number;
   thumbnail?: string;
   fileSize?: number;
   mimeType?: string;
-  /** Text content when type === "text" */
   text?: string;
   fontSize?: number;
   fontColor?: string;
@@ -24,31 +27,28 @@ export interface TimelineElement {
   id: string;
   mediaId: string;
   trackId: string;
-  /** Start time on the timeline (seconds) */
   startTime: number;
-  /** Duration on the timeline (seconds) */
   duration: number;
-  /** Trim from media start */
   trimStart: number;
-  /** Trim from media end */
   trimEnd: number;
-  /** Volume 0–1 for audio/video */
   volume: number;
-  /** Opacity 0–1 */
   opacity: number;
-  /** Scale factor */
   scale: number;
-  /** Position offset on canvas (normalized -0.5..0.5 relative to center works too; we use px in preview) */
   x: number;
   y: number;
-  /** Rotation degrees */
   rotation: number;
   name?: string;
-  /** Override text for text clips */
   text?: string;
   fontSize?: number;
   fontColor?: string;
   fontFamily?: string;
+  /** Fade in duration (seconds) */
+  fadeIn: number;
+  /** Fade out duration (seconds) */
+  fadeOut: number;
+  /** Transition at the start of this clip */
+  transitionIn: TransitionType;
+  transitionDuration: number;
 }
 
 export interface Track {
@@ -59,6 +59,8 @@ export interface Track {
   visible: boolean;
   locked: boolean;
   order: number;
+  /** Track-level volume 0–1 */
+  volume: number;
 }
 
 export interface Project {
@@ -81,6 +83,17 @@ export interface SelectionState {
   selectedTrackId: string | null;
 }
 
+/** Serializable project file */
+export interface ProjectFile {
+  version: 1;
+  savedAt: string;
+  project: Project;
+  tracks: Track[];
+  elements: TimelineElement[];
+  /** Media metadata only — binary src re-attached on load when possible */
+  media: Array<Omit<MediaAsset, "src"> & { src?: string }>;
+}
+
 export const ASPECT_RESOLUTIONS: Record<
   AspectRatio,
   { width: number; height: number }
@@ -90,3 +103,55 @@ export const ASPECT_RESOLUTIONS: Record<
   "1:1": { width: 1080, height: 1080 },
   "4:5": { width: 1080, height: 1350 },
 };
+
+export function resolutionPixels(
+  aspect: AspectRatio,
+  res: ExportResolution
+): { width: number; height: number } {
+  const base = ASPECT_RESOLUTIONS[aspect] ?? ASPECT_RESOLUTIONS["9:16"];
+  if (res === "1080p") return { ...base };
+  // 720p scale
+  const scale = 720 / Math.min(base.width, base.height);
+  // Prefer height-based for vertical
+  if (base.height >= base.width) {
+    return {
+      width: Math.round(base.width * (720 / base.height)),
+      height: 720,
+    };
+  }
+  return {
+    width: 1280,
+    height: Math.round(base.height * (1280 / base.width)),
+  };
+}
+
+export function defaultElementProps(): Pick<
+  TimelineElement,
+  | "fadeIn"
+  | "fadeOut"
+  | "transitionIn"
+  | "transitionDuration"
+  | "volume"
+  | "opacity"
+  | "scale"
+  | "x"
+  | "y"
+  | "rotation"
+  | "trimStart"
+  | "trimEnd"
+> {
+  return {
+    fadeIn: 0,
+    fadeOut: 0,
+    transitionIn: "none",
+    transitionDuration: 0.5,
+    volume: 1,
+    opacity: 1,
+    scale: 1,
+    x: 0,
+    y: 0,
+    rotation: 0,
+    trimStart: 0,
+    trimEnd: 0,
+  };
+}

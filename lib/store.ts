@@ -10,9 +10,15 @@ import type {
   PlaybackState,
   SelectionState,
   AspectRatio,
+  ProjectFile,
 } from "./types";
+import { defaultElementProps } from "./types";
+import {
+  buildProjectFile,
+  autosaveToLocalStorage,
+  loadAutosave,
+} from "./project-io";
 
-/** Snapshot of editable timeline state for undo/redo */
 interface HistorySnapshot {
   media: MediaAsset[];
   tracks: Track[];
@@ -28,8 +34,8 @@ interface EditorStore extends PlaybackState, SelectionState {
   media: MediaAsset[];
   tracks: Track[];
   elements: TimelineElement[];
+  hydrated: boolean;
 
-  // History
   past: HistorySnapshot[];
   future: HistorySnapshot[];
   pushHistory: () => void;
@@ -45,22 +51,19 @@ interface EditorStore extends PlaybackState, SelectionState {
   addMedia: (asset: Omit<MediaAsset, "id">) => string;
   removeMedia: (id: string) => void;
   addTextAsset: (text?: string) => string;
+  detachAudio: (elementId: string) => void;
 
   addTrack: (type: Track["type"]) => string;
   removeTrack: (id: string) => void;
   toggleTrackMute: (id: string) => void;
   toggleTrackVisibility: (id: string) => void;
+  setTrackVolume: (id: string, volume: number) => void;
 
   addElement: (el: Omit<TimelineElement, "id">) => string;
   removeElements: (ids: string[]) => void;
   updateElement: (id: string, patch: Partial<TimelineElement>) => void;
-  /** Move in time and optionally to another track */
   moveElement: (id: string, startTime: number, trackId?: string) => void;
-  resizeElement: (
-    id: string,
-    edge: "start" | "end",
-    newTime: number
-  ) => void;
+  resizeElement: (id: string, edge: "start" | "end", newTime: number) => void;
   splitElement: (id: string, atTime: number) => void;
 
   selectElements: (ids: string[]) => void;
@@ -74,9 +77,15 @@ interface EditorStore extends PlaybackState, SelectionState {
 
   getSelectedElements: () => TimelineElement[];
   recalculateDuration: () => void;
+
+  /** Project IO */
+  exportProjectFile: () => ProjectFile;
+  importProjectFile: (file: ProjectFile) => void;
+  hydrateFromAutosave: () => void;
+  persistAutosave: () => void;
 }
 
-function snapshot(s: {
+function snap(s: {
   media: MediaAsset[];
   tracks: Track[];
   elements: TimelineElement[];
@@ -93,33 +102,9 @@ function snapshot(s: {
 }
 
 const defaultTracks: Track[] = [
-  {
-    id: "track-v1",
-    type: "video",
-    name: "Video 1",
-    muted: false,
-    visible: true,
-    locked: false,
-    order: 0,
-  },
-  {
-    id: "track-t1",
-    type: "text",
-    name: "Text 1",
-    muted: false,
-    visible: true,
-    locked: false,
-    order: 1,
-  },
-  {
-    id: "track-a1",
-    type: "audio",
-    name: "Audio 1",
-    muted: false,
-    visible: true,
-    locked: false,
-    order: 2,
-  },
+  { id: "track-v1", type: "video", name: "Video 1", muted: false, visible: true, locked: false, order: 0, volume: 1 },
+  { id: "track-t1", type: "text", name: "Text 1", muted: false, visible: true, locked: false, order: 1, volume: 1 },
+  { id: "track-a1", type: "audio", name: "Audio 1", muted: false, visible: true, locked: false, order: 2, volume: 1 },
 ];
 
 export const useEditorStore = create<EditorStore>((set, get) => ({
@@ -134,6 +119,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   media: [],
   tracks: defaultTracks,
   elements: [],
+  hydrated: false,
   currentTime: 0,
   isPlaying: false,
   volume: 1,
@@ -144,50 +130,38 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   pushHistory: () => {
     const s = get();
-    const snap = snapshot(s);
     set({
-      past: [...s.past.slice(-(MAX_HISTORY - 1)), snap],
+      past: [...s.past.slice(-(MAX_HISTORY - 1)), snap(s)],
       future: [],
     });
   },
 
   undo: () => {
     const s = get();
-    if (s.past.length === 0) return;
+    if (!s.past.length) return;
     const previous = s.past[s.past.length - 1];
-    const current = snapshot(s);
     set({
       past: s.past.slice(0, -1),
-      future: [current, ...s.future].slice(0, MAX_HISTORY),
-      media: previous.media,
-      tracks: previous.tracks,
-      elements: previous.elements,
-      project: previous.project,
-      selectedElementIds: previous.selectedElementIds,
+      future: [snap(s), ...s.future].slice(0, MAX_HISTORY),
+      ...previous,
     });
   },
 
   redo: () => {
     const s = get();
-    if (s.future.length === 0) return;
+    if (!s.future.length) return;
     const next = s.future[0];
-    const current = snapshot(s);
     set({
       future: s.future.slice(1),
-      past: [...s.past, current].slice(-MAX_HISTORY),
-      media: next.media,
-      tracks: next.tracks,
-      elements: next.elements,
-      project: next.project,
-      selectedElementIds: next.selectedElementIds,
+      past: [...s.past, snap(s)].slice(-MAX_HISTORY),
+      ...next,
     });
   },
 
   canUndo: () => get().past.length > 0,
   canRedo: () => get().future.length > 0,
 
-  setProjectName: (name) =>
-    set((s) => ({ project: { ...s.project, name } })),
+  setProjectName: (name) => set((s) => ({ project: { ...s.project, name } })),
 
   setAspectRatio: (ratio) => {
     get().pushHistory();
@@ -239,12 +213,68 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     return id;
   },
 
+  detachAudio: (elementId) => {
+    const s = get();
+    const el = s.elements.find((e) => e.id === elementId);
+    if (!el) return;
+    const asset = s.media.find((m) => m.id === el.mediaId);
+    if (!asset || asset.type !== "video" || !asset.src) return;
+
+    s.pushHistory();
+
+    const audioAssetId = nanoid();
+    const audioElId = nanoid();
+    let audioTrack = s.tracks.find((t) => t.type === "audio");
+    if (!audioTrack) {
+      const tid = nanoid();
+      audioTrack = {
+        id: tid,
+        type: "audio",
+        name: "Audio 1",
+        muted: false,
+        visible: true,
+        locked: false,
+        order: s.tracks.length,
+        volume: 1,
+      };
+      set((st) => ({ tracks: [...st.tracks, audioTrack!] }));
+    }
+
+    set((st) => ({
+      media: [
+        ...st.media,
+        {
+          id: audioAssetId,
+          type: "audio",
+          name: `${asset.name} (audio)`,
+          src: asset.src,
+          duration: asset.duration,
+          mimeType: asset.mimeType,
+        },
+      ],
+      elements: [
+        ...st.elements,
+        {
+          ...defaultElementProps(),
+          id: audioElId,
+          mediaId: audioAssetId,
+          trackId: audioTrack!.id,
+          startTime: el.startTime,
+          duration: el.duration,
+          trimStart: el.trimStart,
+          trimEnd: el.trimEnd,
+          volume: el.volume,
+          name: `${asset.name} (audio)`,
+        },
+      ],
+    }));
+  },
+
   addTrack: (type) => {
     get().pushHistory();
     const id = nanoid();
     const count = get().tracks.filter((t) => t.type === type).length + 1;
-    const label =
-      type === "video" ? "Video" : type === "audio" ? "Audio" : "Text";
+    const label = type === "video" ? "Video" : type === "audio" ? "Audio" : "Text";
     set((s) => ({
       tracks: [
         ...s.tracks,
@@ -256,6 +286,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           visible: true,
           locked: false,
           order: s.tracks.length,
+          volume: 1,
         },
       ],
     }));
@@ -288,11 +319,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }));
   },
 
+  setTrackVolume: (id, volume) => {
+    set((s) => ({
+      tracks: s.tracks.map((t) =>
+        t.id === id ? { ...t, volume: Math.min(1, Math.max(0, volume)) } : t
+      ),
+    }));
+  },
+
   addElement: (el) => {
     get().pushHistory();
     const id = nanoid();
+    const full = { ...defaultElementProps(), ...el, id };
     set((s) => {
-      const elements = [...s.elements, { ...el, id }];
+      const elements = [...s.elements, full];
       const maxEnd = Math.max(
         s.project.duration,
         ...elements.map((e) => e.startTime + e.duration)
@@ -309,23 +349,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().pushHistory();
     set((s) => ({
       elements: s.elements.filter((e) => !ids.includes(e.id)),
-      selectedElementIds: s.selectedElementIds.filter(
-        (id) => !ids.includes(id)
-      ),
+      selectedElementIds: s.selectedElementIds.filter((id) => !ids.includes(id)),
     }));
   },
 
   updateElement: (id, patch) => {
     get().pushHistory();
     set((s) => ({
-      elements: s.elements.map((e) =>
-        e.id === id ? { ...e, ...patch } : e
-      ),
+      elements: s.elements.map((e) => (e.id === id ? { ...e, ...patch } : e)),
     }));
   },
 
   moveElement: (id, startTime, trackId) => {
-    // During live drag we call this often — history is pushed once on pointer down
     set((s) => ({
       elements: s.elements.map((e) =>
         e.id === id
@@ -342,7 +377,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   resizeElement: (id, edge, newTime) => {
     const el = get().elements.find((e) => e.id === id);
     if (!el) return;
-
     if (edge === "start") {
       const end = el.startTime + el.duration;
       const clamped = Math.max(0, Math.min(newTime, end - 0.1));
@@ -363,9 +397,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const clamped = Math.max(el.startTime + 0.1, newTime);
       set((s) => ({
         elements: s.elements.map((e) =>
-          e.id === id
-            ? { ...e, duration: clamped - e.startTime }
-            : e
+          e.id === id ? { ...e, duration: clamped - e.startTime } : e
         ),
       }));
     }
@@ -376,11 +408,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!el) return;
     const relative = atTime - el.startTime;
     if (relative <= 0.1 || relative >= el.duration - 0.1) return;
-
     get().pushHistory();
     const leftDuration = relative;
     const rightDuration = el.duration - relative;
-
     set((s) => ({
       elements: [
         ...s.elements.filter((e) => e.id !== id),
@@ -389,6 +419,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           id: nanoid(),
           duration: leftDuration,
           trimEnd: el.trimEnd + rightDuration,
+          fadeOut: 0,
         },
         {
           ...el,
@@ -396,6 +427,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           startTime: atTime,
           duration: rightDuration,
           trimStart: el.trimStart + leftDuration,
+          fadeIn: 0,
+          transitionIn: "none",
         },
       ],
       selectedElementIds: [],
@@ -427,5 +460,62 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       10
     );
     set({ project: { ...project, duration: maxEnd } });
+  },
+
+  exportProjectFile: () => {
+    const s = get();
+    return buildProjectFile(s.project, s.tracks, s.elements, s.media);
+  },
+
+  importProjectFile: (file) => {
+    get().pushHistory();
+    set({
+      project: file.project,
+      tracks: file.tracks.map((t) => ({
+        volume: 1,
+        ...t,
+      })),
+      elements: file.elements.map((e) => ({
+        ...defaultElementProps(),
+        ...e,
+      })),
+      media: file.media.map((m) => ({
+        src: "",
+        ...m,
+      })) as MediaAsset[],
+      selectedElementIds: [],
+      currentTime: 0,
+      isPlaying: false,
+    });
+  },
+
+  hydrateFromAutosave: () => {
+    if (get().hydrated) return;
+    const saved = loadAutosave();
+    if (saved) {
+      set({
+        project: saved.project,
+        tracks: saved.tracks.map((t) => ({ volume: 1, ...t })),
+        elements: saved.elements.map((e) => ({
+          ...defaultElementProps(),
+          ...e,
+        })),
+        media: (saved.media as MediaAsset[]).map((m) => ({
+          src: m.src || "",
+          ...m,
+        })),
+        hydrated: true,
+      });
+    } else {
+      set({ hydrated: true });
+    }
+  },
+
+  persistAutosave: () => {
+    const s = get();
+    // Include blob srcs for same-session restore
+    const file = buildProjectFile(s.project, s.tracks, s.elements, s.media);
+    file.media = s.media;
+    autosaveToLocalStorage(file);
   },
 }));
