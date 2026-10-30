@@ -29,6 +29,8 @@ export interface ClipKeyframe {
   x: number;
   y: number;
   scale: number;
+  /** Optional for backward compatibility with earlier saved projects. */
+  rotation?: number;
 }
 
 export interface TimelineElement {
