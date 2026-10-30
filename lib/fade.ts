@@ -19,6 +19,8 @@ export function fadedOpacity(
   // Simple dissolve / fade transition at start
   if (
     el.transitionIn !== "none" &&
+    el.transitionIn !== "slide-left" &&
+    el.transitionIn !== "slide-right" &&
     el.transitionDuration > 0 &&
     localTime < el.transitionDuration
   ) {
