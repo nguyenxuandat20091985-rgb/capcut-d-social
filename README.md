@@ -57,8 +57,10 @@ Endpoints:
 - `PATCH /api/projects/:id` — cập nhật title/projectData.
 - `DELETE /api/projects/:id` — xóa project.
 - `GET /api/projects/:id/assets` — liệt kê media cloud.
-- `POST /api/projects/:id/assets` — multipart form gồm `file`, `assetId`, `assetType`.
+- `POST /api/projects/:id/assets` — đăng ký metadata JSON sau khi browser upload file trực tiếp lên private Storage bucket. Client helper nằm ở `lib/cloud-projects.ts`; file lớn không đi qua Vercel Function.
 - `GET /api/projects/:id/assets/:assetId` — tạo signed URL có thời hạn 1 giờ.
+
+Các hàm `saveCloudProject`, `loadCloudProject`, `uploadCloudAsset`, `getCloudAssetUrl` và `deleteCloudAsset` nhận Supabase access token từ luồng đăng nhập của ứng dụng gọi chúng.
 - `DELETE /api/projects/:id/assets/:assetId` — xóa file và metadata.
 
 **Lưu ý:** API và schema đã được chuẩn bị; để bật Cloud Save end-to-end cần chạy migration trên đúng Supabase project, cấu hình URL/anon key và nối luồng đăng nhập Supabase để cấp access token. Repo hiện chưa có màn hình đăng nhập Supabase hoặc nút đồng bộ Cloud trong editor. Không dùng service-role key để né RLS.
