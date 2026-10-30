@@ -404,9 +404,12 @@ export async function exportProject(
     const sourceDuration = el.duration * speed;
     const delayMs = Math.max(0, Math.round(el.startTime * 1000));
     const label = `aud${audioIndex++}`;
-    audioFilterParts.push(
-      `[${inputIndex}:a]atrim=start=0:duration=${sourceDuration.toFixed(3)},asetpts=PTS-STARTPTS,atempo=${speed.toFixed(3)},volume=${volume.toFixed(3)},adelay=${delayMs}:all=1[${label}]`
-    );
+    const fadeIn = Math.max(0, Math.min(el.duration, el.fadeIn ?? 0));
+    const fadeOut = Math.max(0, Math.min(el.duration, el.fadeOut ?? 0));
+    let audioChain = `[${inputIndex}:a]atrim=start=0:duration=${sourceDuration.toFixed(3)},asetpts=PTS-STARTPTS,atempo=${speed.toFixed(3)},volume=${volume.toFixed(3)}`;
+    if (fadeIn > 0) audioChain += `,afade=t=in:st=0:d=${fadeIn.toFixed(3)}`;
+    if (fadeOut > 0) audioChain += `,afade=t=out:st=${Math.max(0, el.duration - fadeOut).toFixed(3)}:d=${fadeOut.toFixed(3)}`;
+    audioFilterParts.push(`${audioChain},adelay=${delayMs}:all=1[${label}]`);
   }
   if (audioIndex > 0) {
     const labels = Array.from({ length: audioIndex }, (_, i) => `[aud${i}]`).join("");
