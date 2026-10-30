@@ -380,6 +380,8 @@ export async function exportProject(
     const positionYExpr = motionExpression(el, "y", positionY);
     const hasMotionKeyframes = (el.keyframes?.length ?? 0) > 0;
     let chain = `[${inIdx}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,format=yuva420p,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black@0,setpts=(PTS-STARTPTS)/${speed.toFixed(3)}+${start}/TB`;
+    if (el.flipH) chain += `,hflip`;
+    if (el.flipV) chain += `,vflip`;
     if (hasMotionKeyframes) chain += `,scale=w='max(1,iw*(${motionExpression(el, "scale", clipScale)}))':h='max(1,ih*(${motionExpression(el, "scale", clipScale)}))':eval=frame`;
     else if (clipScale !== 1) chain += `,scale=w='max(1,iw*${clipScale.toFixed(3)})':h='max(1,ih*${clipScale.toFixed(3)})'`;
     if ((el.rotation ?? 0) !== 0 || (el.keyframes?.some((frame) => frame.rotation !== undefined) ?? false)) chain += `,rotate='(${clipRotationExpr})*PI/180':ow=rotw(iw):oh=roth(ih):c=black@0`;
