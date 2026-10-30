@@ -38,6 +38,16 @@ export default function CloudProjectsPanel() {
     setProjects(rows);
   }, []);
 
+  const ensureSession = async () => {
+    const active = await getEditorSession();
+    if (!active) {
+      setSession(null);
+      throw new Error("Phiên Cloud đã hết hạn. Vui lòng đăng nhập lại.");
+    }
+    setSession(active);
+    return active;
+  };
+
   useEffect(() => {
     let alive = true;
     void getEditorSession().then(async (active) => {
@@ -93,9 +103,10 @@ export default function CloudProjectsPanel() {
     setError("");
     setMessage("");
     try {
+      const active = await ensureSession();
       const state = useEditorStore.getState();
       const file = state.exportProjectFile();
-      await saveCloudProject(file, session.access_token);
+      await saveCloudProject(file, active.access_token);
       let uploaded = 0;
       let skipped = 0;
       for (const asset of file.media) {
@@ -114,8 +125,8 @@ export default function CloudProjectsPanel() {
             asset.id,
             asset.type,
             uploadFile,
-            session.user.id,
-            session.access_token
+            active.user.id,
+            active.access_token
           );
           uploaded++;
         } catch (err) {
@@ -123,7 +134,7 @@ export default function CloudProjectsPanel() {
           console.warn("Cloud asset upload skipped", asset.name, err);
         }
       }
-      await refreshProjects(session);
+      await refreshProjects(active);
       setMessage(
         skipped > 0
           ? `Đã lưu project; tải lên ${uploaded} media, còn ${skipped} media chưa đồng bộ (kiểm tra giới hạn 50 MB/định dạng).`
@@ -142,14 +153,15 @@ export default function CloudProjectsPanel() {
     setError("");
     setMessage("");
     try {
-      const file = await loadCloudProject(projectId, session.access_token);
+      const active = await ensureSession();
+      const file = await loadCloudProject(projectId, active.access_token);
       let missing = 0;
       const restoredMedia = await Promise.all(file.media.map(async (asset) => {
         if (asset.type === "text" || (asset.src && !asset.src.startsWith("blob:"))) {
           return asset;
         }
         try {
-          const signedUrl = await getCloudAssetUrl(projectId, asset.id, session.access_token);
+          const signedUrl = await getCloudAssetUrl(projectId, asset.id, active.access_token);
           const response = await fetch(signedUrl, { cache: "no-store" });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const blob = await response.blob();
