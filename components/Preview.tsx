@@ -6,6 +6,14 @@ import { fadedOpacity, slideOffset } from "@/lib/fade";
 import { useEffect, useRef, useMemo } from "react";
 import { Play, Pause } from "lucide-react";
 
+function clipFadeGain(el: { fadeIn?: number; fadeOut?: number; duration: number }, localTime: number) {
+  const fadeIn = Math.max(0, el.fadeIn ?? 0);
+  const fadeOut = Math.max(0, el.fadeOut ?? 0);
+  const fadeInGain = fadeIn > 0 ? Math.min(1, Math.max(0, localTime / fadeIn)) : 1;
+  const fadeOutGain = fadeOut > 0 ? Math.min(1, Math.max(0, (el.duration - localTime) / fadeOut)) : 1;
+  return Math.min(fadeInGain, fadeOutGain);
+}
+
 function clipCssFilter(el: { brightness?: number; contrast?: number; saturation?: number; hue?: number; blur?: number }) {
   return [
     `brightness(${el.brightness ?? 1})`,
@@ -158,7 +166,7 @@ export default function Preview() {
                     isPlaying={isPlaying}
                     speed={el.speed ?? 1}
                     muted={track?.muted ?? false}
-                    volume={Math.max(0, Math.min(1, (el.volume ?? 1) * (track?.volume ?? 1)))}
+                    volume={Math.max(0, Math.min(1, (el.volume ?? 1) * (track?.volume ?? 1) * clipFadeGain(el, local))}
                     opacity={opacity}
                     style={{
                       filter: clipCssFilter(el),
@@ -177,7 +185,7 @@ export default function Preview() {
                     localTime={local * (el.speed ?? 1) + (el.trimStart || 0)}
                     isPlaying={isPlaying}
                     speed={el.speed ?? 1}
-                    volume={Math.max(0, Math.min(1, (el.volume ?? 1) * (track?.volume ?? 1)))}
+                    volume={Math.max(0, Math.min(1, (el.volume ?? 1) * (track?.volume ?? 1) * clipFadeGain(el, local)))}
                   />
                 );
               }
