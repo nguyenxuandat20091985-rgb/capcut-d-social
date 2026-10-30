@@ -1,9 +1,17 @@
 "use client";
 
 import { useEditorStore } from "@/lib/store";
-import type { AspectRatio } from "@/lib/types";
+import type { AspectRatio, TransitionType } from "@/lib/types";
 
 const ASPECT_OPTIONS: AspectRatio[] = ["9:16", "16:9", "1:1", "4:5"];
+
+const TRANSITIONS: { id: TransitionType; label: string }[] = [
+  { id: "none", label: "None" },
+  { id: "fade", label: "Fade" },
+  { id: "dissolve", label: "Dissolve" },
+  { id: "slide-left", label: "Slide ←" },
+  { id: "slide-right", label: "Slide →" },
+];
 
 export default function PropertiesPanel() {
   const selected = useEditorStore((s) => s.getSelectedElements());
@@ -11,6 +19,7 @@ export default function PropertiesPanel() {
   const setAspectRatio = useEditorStore((s) => s.setAspectRatio);
   const setBackgroundColor = useEditorStore((s) => s.setBackgroundColor);
   const updateElement = useEditorStore((s) => s.updateElement);
+  const detachAudio = useEditorStore((s) => s.detachAudio);
   const media = useEditorStore((s) => s.media);
 
   if (selected.length === 0) {
@@ -44,7 +53,7 @@ export default function PropertiesPanel() {
         />
 
         <p className="mt-auto text-center text-xs text-gray-600">
-          Select a clip to edit properties
+          Chọn clip để chỉnh thuộc tính
         </p>
       </div>
     );
@@ -53,6 +62,8 @@ export default function PropertiesPanel() {
   const el = selected[0];
   const asset = media.find((m) => m.id === el.mediaId);
   const isText = asset?.type === "text";
+  const isVideo = asset?.type === "video";
+  const isAudio = asset?.type === "audio";
 
   return (
     <div className="flex h-full flex-col overflow-y-auto p-3">
@@ -64,9 +75,18 @@ export default function PropertiesPanel() {
         {selected.length > 1 && ` (+${selected.length - 1})`}
       </p>
 
+      {isVideo && (
+        <button
+          onClick={() => detachAudio(el.id)}
+          className="mb-3 w-full rounded bg-gray-800 py-1.5 text-xs text-gray-300 hover:bg-gray-700"
+        >
+          Tách audio (Detach Audio)
+        </button>
+      )}
+
       {isText && (
         <>
-          <Field label="Text content">
+          <Field label="Nội dung chữ">
             <textarea
               rows={3}
               value={el.text ?? asset?.text ?? ""}
@@ -74,13 +94,11 @@ export default function PropertiesPanel() {
               className="w-full rounded bg-gray-800 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-500"
             />
           </Field>
-
-          <Field label={`Font size (${el.fontSize ?? asset?.fontSize ?? 48}px)`}>
+          <Field label={`Cỡ chữ (${el.fontSize ?? asset?.fontSize ?? 48}px)`}>
             <input
               type="range"
               min={12}
               max={120}
-              step={1}
               value={el.fontSize ?? asset?.fontSize ?? 48}
               onChange={(e) =>
                 updateElement(el.id, { fontSize: parseInt(e.target.value, 10) })
@@ -88,8 +106,7 @@ export default function PropertiesPanel() {
               className="w-full"
             />
           </Field>
-
-          <Field label="Font color">
+          <Field label="Màu chữ">
             <input
               type="color"
               value={el.fontColor ?? asset?.fontColor ?? "#ffffff"}
@@ -102,69 +119,118 @@ export default function PropertiesPanel() {
         </>
       )}
 
+      <Section title="Thời gian" />
       <Field label="Start (s)">
-        <input
-          type="number"
-          step={0.1}
-          min={0}
-          value={Number(el.startTime.toFixed(2))}
-          onChange={(e) =>
-            updateElement(el.id, { startTime: parseFloat(e.target.value) || 0 })
-          }
-          className="w-full rounded bg-gray-800 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-500"
+        <Num
+          value={el.startTime}
+          onChange={(v) => updateElement(el.id, { startTime: v })}
         />
       </Field>
-
       <Field label="Duration (s)">
-        <input
-          type="number"
-          step={0.1}
+        <Num
+          value={el.duration}
           min={0.1}
-          value={Number(el.duration.toFixed(2))}
-          onChange={(e) =>
-            updateElement(el.id, {
-              duration: Math.max(0.1, parseFloat(e.target.value) || 0.1),
-            })
-          }
-          className="w-full rounded bg-gray-800 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-500"
+          onChange={(v) => updateElement(el.id, { duration: Math.max(0.1, v) })}
         />
       </Field>
 
-      <Field label={`Opacity (${Math.round(el.opacity * 100)}%)`}>
+      <Section title="Fade & Transition" />
+      <Field label={`Fade In (${el.fadeIn?.toFixed(1) ?? 0}s)`}>
+        <input
+          type="range"
+          min={0}
+          max={3}
+          step={0.1}
+          value={el.fadeIn ?? 0}
+          onChange={(e) =>
+            updateElement(el.id, { fadeIn: parseFloat(e.target.value) })
+          }
+          className="w-full"
+        />
+      </Field>
+      <Field label={`Fade Out (${el.fadeOut?.toFixed(1) ?? 0}s)`}>
+        <input
+          type="range"
+          min={0}
+          max={3}
+          step={0.1}
+          value={el.fadeOut ?? 0}
+          onChange={(e) =>
+            updateElement(el.id, { fadeOut: parseFloat(e.target.value) })
+          }
+          className="w-full"
+        />
+      </Field>
+      <Field label="Transition In">
+        <div className="flex flex-wrap gap-1">
+          {TRANSITIONS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => updateElement(el.id, { transitionIn: t.id })}
+              className={`rounded px-2 py-0.5 text-[10px] ${
+                (el.transitionIn ?? "none") === t.id
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </Field>
+      {(el.transitionIn ?? "none") !== "none" && (
+        <Field
+          label={`Độ dài transition (${(el.transitionDuration ?? 0.5).toFixed(1)}s)`}
+        >
+          <input
+            type="range"
+            min={0.1}
+            max={2}
+            step={0.1}
+            value={el.transitionDuration ?? 0.5}
+            onChange={(e) =>
+              updateElement(el.id, {
+                transitionDuration: parseFloat(e.target.value),
+              })
+            }
+            className="w-full"
+          />
+        </Field>
+      )}
+
+      <Section title="Hiển thị" />
+      <Field label={`Opacity (${Math.round((el.opacity ?? 1) * 100)}%)`}>
         <input
           type="range"
           min={0}
           max={1}
           step={0.01}
-          value={el.opacity}
+          value={el.opacity ?? 1}
           onChange={(e) =>
             updateElement(el.id, { opacity: parseFloat(e.target.value) })
           }
           className="w-full"
         />
       </Field>
-
-      <Field label={`Scale (${el.scale.toFixed(2)})`}>
+      <Field label={`Scale (${(el.scale ?? 1).toFixed(2)})`}>
         <input
           type="range"
           min={0.1}
           max={3}
           step={0.05}
-          value={el.scale}
+          value={el.scale ?? 1}
           onChange={(e) =>
             updateElement(el.id, { scale: parseFloat(e.target.value) })
           }
           className="w-full"
         />
       </Field>
-
-      <Field label={`Rotation (${el.rotation}°)`}>
+      <Field label={`Rotation (${el.rotation ?? 0}°)`}>
         <input
           type="range"
           min={-180}
           max={180}
-          step={1}
-          value={el.rotation}
+          value={el.rotation ?? 0}
           onChange={(e) =>
             updateElement(el.id, { rotation: parseFloat(e.target.value) })
           }
@@ -172,43 +238,39 @@ export default function PropertiesPanel() {
         />
       </Field>
 
-      {!isText && (
-        <Field label={`Volume (${Math.round(el.volume * 100)}%)`}>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.01}
-            value={el.volume}
-            onChange={(e) =>
-              updateElement(el.id, { volume: parseFloat(e.target.value) })
-            }
-            className="w-full"
-          />
-        </Field>
+      {(isVideo || isAudio) && (
+        <>
+          <Section title="Âm thanh" />
+          <Field label={`Volume (${Math.round((el.volume ?? 1) * 100)}%)`}>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={el.volume ?? 1}
+              onChange={(e) =>
+                updateElement(el.id, { volume: parseFloat(e.target.value) })
+              }
+              className="w-full"
+            />
+          </Field>
+        </>
       )}
 
       <Field label="Position X">
-        <input
-          type="number"
-          value={el.x}
-          onChange={(e) =>
-            updateElement(el.id, { x: parseFloat(e.target.value) || 0 })
-          }
-          className="w-full rounded bg-gray-800 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-500"
-        />
+        <Num value={el.x ?? 0} onChange={(v) => updateElement(el.id, { x: v })} />
       </Field>
-
       <Field label="Position Y">
-        <input
-          type="number"
-          value={el.y}
-          onChange={(e) =>
-            updateElement(el.id, { y: parseFloat(e.target.value) || 0 })
-          }
-          className="w-full rounded bg-gray-800 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-500"
-        />
+        <Num value={el.y ?? 0} onChange={(v) => updateElement(el.id, { y: v })} />
       </Field>
+    </div>
+  );
+}
+
+function Section({ title }: { title: string }) {
+  return (
+    <div className="mb-2 mt-3 border-t border-gray-800 pt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+      {title}
     </div>
   );
 }
@@ -225,5 +287,26 @@ function Field({
       <label className="mb-1 block text-xs text-gray-500">{label}</label>
       {children}
     </div>
+  );
+}
+
+function Num({
+  value,
+  onChange,
+  min = 0,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+}) {
+  return (
+    <input
+      type="number"
+      step={0.1}
+      min={min}
+      value={Number(value.toFixed(2))}
+      onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+      className="w-full rounded bg-gray-800 px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-500"
+    />
   );
 }

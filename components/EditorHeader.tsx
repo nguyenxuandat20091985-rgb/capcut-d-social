@@ -8,19 +8,30 @@ import {
   type ExportProgress,
   type ExportPhase,
 } from "@/lib/exporter";
-import { Download, Play, Pause, Undo2, Redo2, Loader2 } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { downloadProjectJson, parseProjectFile } from "@/lib/project-io";
+import type { ExportResolution } from "@/lib/types";
+import {
+  Download,
+  Play,
+  Pause,
+  Undo2,
+  Redo2,
+  Loader2,
+  Save,
+  FolderOpen,
+} from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 const PHASE_LABEL: Record<ExportPhase, string> = {
   idle: "",
-  "loading-core": "Tải FFmpeg core",
-  "loading-font": "Tải font tiếng Việt",
+  "loading-core": "Tải FFmpeg",
+  "loading-font": "Tải font VN",
   "writing-media": "Ghi media",
-  "building-graph": "Dựng filter",
+  "building-graph": "Filter graph",
   encoding: "Encode",
   finishing: "Đóng gói",
-  done: "Hoàn tất",
+  done: "Xong",
   error: "Lỗi",
 };
 
@@ -36,15 +47,31 @@ export default function EditorHeader() {
   const redo = useEditorStore((s) => s.redo);
   const canUndo = useEditorStore((s) => s.canUndo);
   const canRedo = useEditorStore((s) => s.canRedo);
+  const exportProjectFile = useEditorStore((s) => s.exportProjectFile);
+  const importProjectFile = useEditorStore((s) => s.importProjectFile);
+  const hydrateFromAutosave = useEditorStore((s) => s.hydrateFromAutosave);
+  const persistAutosave = useEditorStore((s) => s.persistAutosave);
 
   const [exporting, setExporting] = useState(false);
+  const [resolution, setResolution] = useState<ExportResolution>("1080p");
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [progress, setProgress] = useState<ExportProgress>({
     phase: "idle",
     percent: 0,
     message: "",
   });
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Keyboard shortcuts also work from header focus
+  useEffect(() => {
+    hydrateFromAutosave();
+  }, [hydrateFromAutosave]);
+
+  // Autosave every 15s
+  useEffect(() => {
+    const id = setInterval(() => persistAutosave(), 15000);
+    return () => clearInterval(id);
+  }, [persistAutosave]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
@@ -55,14 +82,40 @@ export default function EditorHeader() {
       } else if (e.key === "y" || (e.key === "z" && e.shiftKey)) {
         e.preventDefault();
         redo();
+      } else if (e.key === "s") {
+        e.preventDefault();
+        handleSave();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [undo, redo]);
+  });
+
+  const handleSave = () => {
+    const file = exportProjectFile();
+    // include blob srcs for same-browser restore notes in JSON meta only
+    downloadProjectJson(file);
+    persistAutosave();
+  };
+
+  const handleLoad = async (files: FileList | null) => {
+    const f = files?.[0];
+    if (!f) return;
+    try {
+      const text = await f.text();
+      const parsed = parseProjectFile(text);
+      importProjectFile(parsed);
+      alert(
+        "Đã load project. Lưu ý: media blob URL không có trong file JSON — cần upload lại media nếu đã F5."
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Không đọc được file");
+    }
+  };
 
   const handleExport = useCallback(async () => {
     if (exporting) return;
+    setShowExportMenu(false);
     setExporting(true);
     setProgress({
       phase: "loading-core",
@@ -77,7 +130,7 @@ export default function EditorHeader() {
           media,
           tracks,
           elements,
-          options: DEFAULT_EXPORT_OPTIONS,
+          options: { ...DEFAULT_EXPORT_OPTIONS, resolution },
         },
         setProgress,
         (msg) => console.log("[ffmpeg]", msg)
@@ -86,28 +139,26 @@ export default function EditorHeader() {
       const safeName =
         project.name.replace(/[^a-z0-9-_\s\u00C0-\u1EF9]/gi, "").trim() ||
         "export";
-      downloadBlob(blob, `${safeName}.mp4`);
+      downloadBlob(blob, `${safeName}-${resolution}.mp4`);
       setProgress({ phase: "done", percent: 100, message: "Hoàn tất!" });
     } catch (err) {
       console.error(err);
       setProgress({
         phase: "error",
         percent: 0,
-        message:
-          err instanceof Error ? err.message : "Export thất bại",
+        message: err instanceof Error ? err.message : "Export thất bại",
       });
       alert(
-        `Export failed: ${err instanceof Error ? err.message : String(err)}\n\nTip: dùng Chrome/Edge. Lần đầu tải FFmpeg + font có thể mất vài giây.`
+        `Export failed: ${err instanceof Error ? err.message : String(err)}`
       );
     } finally {
       setExporting(false);
       setTimeout(
-        () =>
-          setProgress({ phase: "idle", percent: 0, message: "" }),
+        () => setProgress({ phase: "idle", percent: 0, message: "" }),
         4000
       );
     }
-  }, [exporting, project, media, tracks, elements]);
+  }, [exporting, project, media, tracks, elements, resolution]);
 
   const undoEnabled = canUndo();
   const redoEnabled = canRedo();
@@ -127,15 +178,13 @@ export default function EditorHeader() {
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={undo}
             disabled={!undoEnabled}
             className={cn(
               "rounded p-1.5 hover:bg-gray-800",
-              undoEnabled
-                ? "text-gray-300 hover:text-white"
-                : "text-gray-700 cursor-not-allowed"
+              undoEnabled ? "text-gray-300" : "cursor-not-allowed text-gray-700"
             )}
             title="Undo (Ctrl+Z)"
           >
@@ -146,9 +195,7 @@ export default function EditorHeader() {
             disabled={!redoEnabled}
             className={cn(
               "rounded p-1.5 hover:bg-gray-800",
-              redoEnabled
-                ? "text-gray-300 hover:text-white"
-                : "text-gray-700 cursor-not-allowed"
+              redoEnabled ? "text-gray-300" : "cursor-not-allowed text-gray-700"
             )}
             title="Redo (Ctrl+Y)"
           >
@@ -156,30 +203,85 @@ export default function EditorHeader() {
           </button>
 
           <button
+            onClick={handleSave}
+            className="rounded p-1.5 text-gray-300 hover:bg-gray-800"
+            title="Save project JSON (Ctrl+S)"
+          >
+            <Save size={16} />
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="rounded p-1.5 text-gray-300 hover:bg-gray-800"
+            title="Load project JSON"
+          >
+            <FolderOpen size={16} />
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,.cds.json"
+            className="hidden"
+            onChange={(e) => handleLoad(e.target.files)}
+          />
+
+          <button
             onClick={() => setPlaying(!isPlaying)}
-            className="ml-2 flex items-center gap-1.5 rounded-md bg-gray-800 px-3 py-1.5 text-sm hover:bg-gray-700"
+            className="ml-1 flex items-center gap-1.5 rounded-md bg-gray-800 px-3 py-1.5 text-sm hover:bg-gray-700"
           >
             {isPlaying ? <Pause size={14} /> : <Play size={14} />}
             {isPlaying ? "Pause" : "Play"}
           </button>
 
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            className="ml-2 flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
-          >
-            {exporting ? (
-              <Loader2 size={14} className="animate-spin" />
-            ) : (
-              <Download size={14} />
+          <div className="relative ml-1">
+            <button
+              onClick={() =>
+                exporting ? undefined : setShowExportMenu((v) => !v)
+              }
+              disabled={exporting}
+              className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
+            >
+              {exporting ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Download size={14} />
+              )}
+              {exporting ? `${progress.percent}%` : "Export"}
+            </button>
+
+            {showExportMenu && !exporting && (
+              <div className="absolute right-0 z-50 mt-1 w-44 rounded-lg border border-gray-700 bg-gray-900 p-2 shadow-xl">
+                <p className="mb-2 text-[10px] uppercase text-gray-500">
+                  Độ phân giải
+                </p>
+                {(["720p", "1080p"] as ExportResolution[]).map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setResolution(r)}
+                    className={cn(
+                      "mb-1 w-full rounded px-2 py-1.5 text-left text-xs",
+                      resolution === r
+                        ? "bg-blue-600 text-white"
+                        : "text-gray-300 hover:bg-gray-800"
+                    )}
+                  >
+                    {r} {r === "1080p" ? "(Full HD)" : "(nhanh hơn)"}
+                  </button>
+                ))}
+                <button
+                  onClick={handleExport}
+                  className="mt-1 w-full rounded bg-blue-600 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
+                >
+                  Xuất MP4 {resolution}
+                </button>
+              </div>
             )}
-            {exporting ? `${progress.percent}%` : "Export MP4"}
-          </button>
+          </div>
         </div>
       </header>
 
-      {/* Detailed progress bar */}
-      {exporting || progress.phase === "done" || progress.phase === "error" ? (
+      {(exporting ||
+        progress.phase === "done" ||
+        progress.phase === "error") && (
         <div className="border-b border-gray-800 bg-gray-900 px-4 py-2">
           <div className="mb-1 flex items-center justify-between text-xs">
             <span
@@ -208,7 +310,7 @@ export default function EditorHeader() {
               style={{ width: `${progress.percent}%` }}
             />
           </div>
-          <div className="mt-1.5 flex gap-1">
+          <div className="mt-1.5 flex flex-wrap gap-1">
             {(
               [
                 "loading-core",
@@ -250,7 +352,7 @@ export default function EditorHeader() {
             })}
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

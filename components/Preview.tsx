@@ -2,7 +2,8 @@
 
 import { useEditorStore } from "@/lib/store";
 import { formatTime } from "@/lib/utils";
-import { useEffect, useRef } from "react";
+import { fadedOpacity, slideOffset } from "@/lib/fade";
+import { useEffect, useRef, useMemo } from "react";
 
 const ASPECT_MAP: Record<string, string> = {
   "9:16": "aspect-[9/16]",
@@ -22,21 +23,20 @@ export default function Preview() {
   const tracks = useEditorStore((s) => s.tracks);
 
   const rafRef = useRef<number>();
-  const lastTs = useRef<number>(0);
+  const lastTs = useRef(0);
   const timeRef = useRef(currentTime);
   timeRef.current = currentTime;
+  const stageRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isPlaying) {
       lastTs.current = 0;
       return;
     }
-
     const tick = (ts: number) => {
       if (lastTs.current === 0) lastTs.current = ts;
       const delta = (ts - lastTs.current) / 1000;
       lastTs.current = ts;
-
       const next = timeRef.current + delta;
       if (next >= project.duration) {
         setCurrentTime(0);
@@ -47,7 +47,6 @@ export default function Preview() {
       setCurrentTime(next);
       rafRef.current = requestAnimationFrame(tick);
     };
-
     rafRef.current = requestAnimationFrame(tick);
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -55,18 +54,25 @@ export default function Preview() {
     };
   }, [isPlaying, project.duration, setCurrentTime, setPlaying]);
 
-  const activeElements = elements.filter(
-    (el) =>
-      currentTime >= el.startTime &&
-      currentTime < el.startTime + el.duration &&
-      tracks.find((t) => t.id === el.trackId)?.visible !== false
+  const activeElements = useMemo(
+    () =>
+      elements.filter(
+        (el) =>
+          currentTime >= el.startTime &&
+          currentTime < el.startTime + el.duration &&
+          tracks.find((t) => t.id === el.trackId)?.visible !== false
+      ),
+    [elements, currentTime, tracks]
   );
+
+  const stageW = stageRef.current?.clientWidth ?? 360;
 
   return (
     <div className="relative flex h-full flex-col">
       <div className="flex flex-1 items-center justify-center p-4">
         <div
-          className={`${ASPECT_MAP[project.aspectRatio] ?? "aspect-[9/16]"} relative h-full max-h-full w-auto max-w-full overflow-hidden rounded-lg shadow-2xl`}
+          ref={stageRef}
+          className={`${ASPECT_MAP[project.aspectRatio] ?? "aspect-[9/16]"} relative h-full max-h-full w-auto max-w-full overflow-hidden rounded-lg shadow-2xl will-change-transform`}
           style={{ backgroundColor: project.backgroundColor }}
         >
           {activeElements.length === 0 ? (
@@ -77,6 +83,9 @@ export default function Preview() {
             activeElements.map((el) => {
               const asset = media.find((m) => m.id === el.mediaId);
               if (!asset) return null;
+              const local = currentTime - el.startTime;
+              const opacity = fadedOpacity(el, local);
+              const slideX = slideOffset(el, local, stageW);
 
               if (asset.type === "text") {
                 const text = el.text ?? asset.text ?? "Text";
@@ -85,17 +94,18 @@ export default function Preview() {
                 return (
                   <div
                     key={el.id}
-                    className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                    className="pointer-events-none absolute inset-0 flex items-center justify-center"
                     style={{
-                      opacity: el.opacity,
-                      transform: `translate(${el.x}px, ${el.y}px) scale(${el.scale}) rotate(${el.rotation}deg)`,
+                      opacity,
+                      transform: `translate(${el.x + slideX}px, ${el.y}px) scale(${el.scale}) rotate(${el.rotation}deg)`,
                     }}
                   >
                     <span
                       style={{
                         fontSize: `${fontSize}px`,
                         color,
-                        fontFamily: el.fontFamily ?? asset.fontFamily ?? "Arial",
+                        fontFamily:
+                          el.fontFamily ?? asset.fontFamily ?? "Noto Sans, Arial",
                         textShadow: "0 2px 8px rgba(0,0,0,0.7)",
                         whiteSpace: "pre-wrap",
                         textAlign: "center",
@@ -116,24 +126,25 @@ export default function Preview() {
                     alt={asset.name}
                     className="absolute inset-0 h-full w-full object-contain"
                     style={{
-                      opacity: el.opacity,
-                      transform: `translate(${el.x}px, ${el.y}px) scale(${el.scale}) rotate(${el.rotation}deg)`,
+                      opacity,
+                      transform: `translate(${el.x + slideX}px, ${el.y}px) scale(${el.scale}) rotate(${el.rotation}deg)`,
                     }}
+                    draggable={false}
                   />
                 );
               }
 
               if (asset.type === "video") {
                 return (
-                  <video
+                  <VideoLayer
                     key={el.id}
                     src={asset.src}
-                    className="absolute inset-0 h-full w-full object-contain"
+                    localTime={local + (el.trimStart || 0)}
+                    isPlaying={isPlaying}
+                    opacity={opacity}
                     style={{
-                      opacity: el.opacity,
-                      transform: `translate(${el.x}px, ${el.y}px) scale(${el.scale}) rotate(${el.rotation}deg)`,
+                      transform: `translate(${el.x + slideX}px, ${el.y}px) scale(${el.scale}) rotate(${el.rotation}deg)`,
                     }}
-                    muted
                   />
                 );
               }
@@ -154,5 +165,52 @@ export default function Preview() {
         <span>{project.fps} fps</span>
       </div>
     </div>
+  );
+}
+
+/** Keep a single video element in sync with playhead without remounting */
+function VideoLayer({
+  src,
+  localTime,
+  isPlaying,
+  opacity,
+  style,
+}: {
+  src: string;
+  localTime: number;
+  isPlaying: boolean;
+  opacity: number;
+  style: React.CSSProperties;
+}) {
+  const ref = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    if (Math.abs(v.currentTime - localTime) > 0.25) {
+      v.currentTime = Math.max(0, localTime);
+    }
+  }, [localTime]);
+
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    if (isPlaying) {
+      v.play().catch(() => {});
+    } else {
+      v.pause();
+    }
+  }, [isPlaying]);
+
+  return (
+    <video
+      ref={ref}
+      src={src}
+      className="absolute inset-0 h-full w-full object-contain"
+      style={{ opacity, ...style }}
+      muted
+      playsInline
+      preload="auto"
+    />
   );
 }
