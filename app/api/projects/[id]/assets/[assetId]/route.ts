@@ -48,7 +48,7 @@ export async function GET(request: Request, { params }: RouteContext) {
   const result = await signed.json() as { signedURL?: string; signedUrl?: string };
   const rawSignedUrl = result.signedURL ?? result.signedUrl;
   if (!rawSignedUrl) return Response.json({ error: "Supabase không trả về signed URL." }, { status: 502 });
-  const signedUrl = /^https?:\\/\\//i.test(rawSignedUrl)
+  const signedUrl = /^https?:\/\//i.test(rawSignedUrl)
     ? rawSignedUrl
     : rawSignedUrl.startsWith("/storage/v1/")
       ? `${found.context.url}${rawSignedUrl}`
