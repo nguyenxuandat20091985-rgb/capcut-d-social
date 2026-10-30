@@ -4,6 +4,7 @@ import { useEditorStore } from "@/lib/store";
 import { formatTime } from "@/lib/utils";
 import { fadedOpacity, slideOffset } from "@/lib/fade";
 import { useEffect, useRef, useMemo } from "react";
+import { Play, Pause } from "lucide-react";
 
 const ASPECT_MAP: Record<string, string> = {
   "9:16": "aspect-[9/16]",
@@ -60,7 +61,9 @@ export default function Preview() {
         (el) =>
           currentTime >= el.startTime &&
           currentTime < el.startTime + el.duration &&
-          tracks.find((t) => t.id === el.trackId)?.visible !== false
+          tracks.find((t) => t.id === el.trackId)?.visible !== false &&
+          !(media.find((m) => m.id === el.mediaId)?.type === "audio" &&
+            tracks.find((t) => t.id === el.trackId)?.muted === true)
       ),
     [elements, currentTime, tracks]
   );
@@ -149,20 +152,44 @@ export default function Preview() {
                 );
               }
 
+              if (asset.type === "audio") {
+                const track = tracks.find((t) => t.id === el.trackId);
+                return (
+                  <AudioLayer
+                    key={el.id}
+                    src={asset.src}
+                    localTime={local + (el.trimStart || 0)}
+                    isPlaying={isPlaying}
+                    volume={Math.max(0, Math.min(1, (el.volume ?? 1) * (track?.volume ?? 1)))}
+                  />
+                );
+              }
+
               return null;
             })
           )}
         </div>
       </div>
 
-      <div className="flex items-center justify-center gap-4 border-t border-gray-800 py-2 text-xs text-gray-400">
-        <span>{formatTime(currentTime)}</span>
-        <span>/</span>
-        <span>{formatTime(project.duration)}</span>
-        <span className="text-gray-600">·</span>
-        <span>{project.aspectRatio}</span>
-        <span className="text-gray-600">·</span>
-        <span>{project.fps} fps</span>
+      <div className="flex shrink-0 items-center justify-center gap-3 border-t border-gray-800 bg-gray-950 px-3 py-2 text-xs text-gray-400">
+        <button
+          type="button"
+          onClick={() => setPlaying(!isPlaying)}
+          aria-label={isPlaying ? "Tạm dừng xem trước" : "Phát xem trước"}
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition hover:bg-blue-500 active:scale-95"
+        >
+          {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}
+        </button>
+        <span className="min-w-[82px] tabular-nums">{formatTime(currentTime)} / {formatTime(project.duration)}</span>
+        <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-gray-800">
+          <div
+            className="h-full rounded-full bg-blue-500 transition-[width]"
+            style={{ width: `${project.duration > 0 ? Math.min(100, (currentTime / project.duration) * 100) : 0}%` }}
+          />
+        </div>
+        <span className="shrink-0">{project.aspectRatio}</span>
+        <span className="hidden text-gray-600 sm:inline">·</span>
+        <span className="hidden shrink-0 sm:inline">{project.fps} fps</span>
       </div>
     </div>
   );
@@ -213,4 +240,43 @@ function VideoLayer({
       preload="auto"
     />
   );
+}
+
+
+/** Audio tracks follow the same timeline clock as video and respect clip/track volume. */
+function AudioLayer({
+  src,
+  localTime,
+  isPlaying,
+  volume,
+}: {
+  src: string;
+  localTime: number;
+  isPlaying: boolean;
+  volume: number;
+}) {
+  const ref = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    const audio = ref.current;
+    if (!audio) return;
+    if (Math.abs(audio.currentTime - localTime) > 0.25) {
+      audio.currentTime = Math.max(0, localTime);
+    }
+  }, [localTime]);
+
+  useEffect(() => {
+    const audio = ref.current;
+    if (!audio) return;
+    audio.volume = volume;
+    if (isPlaying) {
+      audio.play().catch((error) => {
+        console.warn("Audio preview could not start; tap Play again if the browser blocked autoplay.", error);
+      });
+    } else {
+      audio.pause();
+    }
+  }, [isPlaying, volume]);
+
+  return <audio ref={ref} src={src} preload="auto" />;
 }

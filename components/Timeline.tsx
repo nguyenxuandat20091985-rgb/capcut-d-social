@@ -321,6 +321,11 @@ export default function Timeline() {
                             12
                           ),
                           height: TRACK_HEIGHT - 8,
+                          backgroundImage: asset?.thumbnail && !isAudio && !isText
+                            ? `linear-gradient(90deg, rgba(15,23,42,.45), rgba(15,23,42,.78)), url("${asset.thumbnail}")`
+                            : undefined,
+                          backgroundSize: "cover",
+                          backgroundPosition: "center",
                         }}
                         title="Kéo để di chuyển / đổi track · Kéo cạnh để resize"
                       >
@@ -329,7 +334,9 @@ export default function Timeline() {
                         <span className="truncate pl-1">
                           {isText
                             ? el.text ?? asset?.text ?? "Text"
-                            : asset?.name ?? el.name ?? "Clip"}
+                            : isAudio
+                              ? `♫ ${asset?.name ?? el.name ?? "Audio"}`
+                              : asset?.name ?? el.name ?? "Clip"}
                         </span>
                       </div>
                     );
