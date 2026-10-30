@@ -37,6 +37,12 @@ export interface TimelineElement {
   x: number;
   y: number;
   rotation: number;
+  /** Non-destructive image/video adjustments */
+  brightness: number;
+  contrast: number;
+  saturation: number;
+  hue: number;
+  blur: number;
   name?: string;
   text?: string;
   fontSize?: number;
@@ -137,6 +143,11 @@ export function defaultElementProps(): Pick<
   | "x"
   | "y"
   | "rotation"
+  | "brightness"
+  | "contrast"
+  | "saturation"
+  | "hue"
+  | "blur"
   | "trimStart"
   | "trimEnd"
 > {
@@ -151,6 +162,11 @@ export function defaultElementProps(): Pick<
     x: 0,
     y: 0,
     rotation: 0,
+    brightness: 1,
+    contrast: 1,
+    saturation: 1,
+    hue: 0,
+    blur: 0,
     trimStart: 0,
     trimEnd: 0,
   };
