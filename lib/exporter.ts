@@ -331,7 +331,6 @@ export async function exportProject(
       const textXExpr = motionExpression(el, "x", textX);
       const textYExpr = motionExpression(el, "y", textY);
       const hasMotionKeyframes = (el.keyframes?.length ?? 0) > 0;
-      const textRotation = (el.rotation ?? 0) * Math.PI / 180;
       const textRotationExpr = motionExpression(el, "rotation", el.rotation ?? 0);
       const slideDuration = Math.max(0, Math.min(el.duration, el.transitionDuration ?? 0.5));
       const slideDirection = el.transitionIn === "slide-left" ? 1 : el.transitionIn === "slide-right" ? -1 : 0;
@@ -373,7 +372,6 @@ export async function exportProject(
     // Scale + pad
     const speed = Math.max(0.5, Math.min(2, el.speed ?? 1));
     const clipScale = Math.max(0.1, Math.min(3, el.scale ?? 1));
-    const clipRotation = (el.rotation ?? 0) * Math.PI / 180;
     const clipRotationExpr = motionExpression(el, "rotation", el.rotation ?? 0);
     const clipOpacity = Math.max(0, Math.min(1, el.opacity ?? 1));
     const positionX = Math.max(-100, Math.min(100, el.x ?? 0));
