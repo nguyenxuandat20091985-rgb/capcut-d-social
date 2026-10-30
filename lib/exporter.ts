@@ -402,8 +402,25 @@ export async function exportProject(
     report("encoding", pct, `Đang encode… ${pct}%`);
   });
 
-  const exitCode = await ffmpeg.exec(args);
+  const cleanupFailedExport = async () => {
+    try { await ffmpeg.deleteFile(outName); } catch { /* file may not exist */ }
+    const names: string[] = [];
+    fileMap.forEach((name) => names.push(name));
+    for (const name of names) {
+      try { await ffmpeg.deleteFile(name); } catch { /* continue cleanup */ }
+    }
+  };
+  try { await ffmpeg.deleteFile(outName); } catch { /* no previous output */ }
+
+  let exitCode: number;
+  try {
+    exitCode = await ffmpeg.exec(args);
+  } catch (error) {
+    await cleanupFailedExport();
+    throw new Error(`FFmpeg không thể hoàn tất export: ${error instanceof Error ? error.message : String(error)}`);
+  }
   if (exitCode !== 0) {
+    await cleanupFailedExport();
     throw new Error(`FFmpeg export failed (exit code ${exitCode}). Không tạo file MP4 giả hoặc video nền thay thế.`);
   }
 
