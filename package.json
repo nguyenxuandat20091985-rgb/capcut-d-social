@@ -1,6 +1,6 @@
 {
   "name": "capcut-d-social",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,6 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.10",
+    "@ffmpeg/util": "^0.12.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.460.0",
     "nanoid": "^5.0.9",

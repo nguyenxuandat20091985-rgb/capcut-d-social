@@ -1,8 +1,12 @@
 "use client";
 
 import { useEditorStore } from "@/lib/store";
-import { exportProject, DEFAULT_EXPORT_OPTIONS } from "@/lib/exporter";
-import { Download, Play, Pause, Undo2, Redo2 } from "lucide-react";
+import {
+  exportProject,
+  downloadBlob,
+  DEFAULT_EXPORT_OPTIONS,
+} from "@/lib/exporter";
+import { Download, Play, Pause, Undo2, Redo2, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 export default function EditorHeader() {
@@ -15,12 +19,16 @@ export default function EditorHeader() {
   const setPlaying = useEditorStore((s) => s.setPlaying);
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [status, setStatus] = useState("");
 
   const handleExport = async () => {
+    if (exporting) return;
     setExporting(true);
     setProgress(0);
+    setStatus("Loading FFmpeg…");
+
     try {
-      await exportProject(
+      const blob = await exportProject(
         {
           project,
           media,
@@ -28,13 +36,30 @@ export default function EditorHeader() {
           elements,
           options: DEFAULT_EXPORT_OPTIONS,
         },
-        setProgress
+        (p) => {
+          setProgress(p);
+          if (p < 10) setStatus("Loading FFmpeg…");
+          else if (p < 40) setStatus("Writing media…");
+          else if (p < 95) setStatus("Encoding…");
+          else setStatus("Finishing…");
+        },
+        (msg) => console.log("[ffmpeg]", msg)
       );
-      // Placeholder: real export would trigger download
-      alert("Export complete (placeholder). Wire FFmpeg.wasm for real output.");
+
+      const safeName = project.name.replace(/[^a-z0-9-_\s]/gi, "").trim() || "export";
+      downloadBlob(blob, `${safeName}.mp4`);
+      setStatus("Done!");
+    } catch (err) {
+      console.error(err);
+      setStatus(
+        err instanceof Error ? err.message : "Export failed. Check console."
+      );
+      alert(
+        `Export failed: ${err instanceof Error ? err.message : String(err)}\n\nTip: first load of FFmpeg.wasm may take a moment. Use Chrome/Edge for best support.`
+      );
     } finally {
       setExporting(false);
-      setProgress(0);
+      setTimeout(() => setStatus(""), 3000);
     }
   };
 
@@ -77,10 +102,16 @@ export default function EditorHeader() {
         <button
           onClick={handleExport}
           disabled={exporting}
-          className="ml-2 flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
+          className="ml-2 flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium hover:bg-blue-500 disabled:opacity-60"
         >
-          <Download size={14} />
-          {exporting ? `Exporting ${progress}%` : "Export"}
+          {exporting ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <Download size={14} />
+          )}
+          {exporting
+            ? `${status || "Exporting"} ${progress}%`
+            : "Export MP4"}
         </button>
       </div>
     </header>

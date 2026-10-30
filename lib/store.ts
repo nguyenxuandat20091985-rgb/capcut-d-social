@@ -18,47 +18,71 @@ interface EditorStore extends PlaybackState, SelectionState {
   tracks: Track[];
   elements: TimelineElement[];
 
-  // Project
   setProjectName: (name: string) => void;
   setAspectRatio: (ratio: AspectRatio) => void;
   setBackgroundColor: (color: string) => void;
 
-  // Media
   addMedia: (asset: Omit<MediaAsset, "id">) => string;
   removeMedia: (id: string) => void;
+  addTextAsset: (text?: string) => string;
 
-  // Tracks
   addTrack: (type: Track["type"]) => string;
   removeTrack: (id: string) => void;
   toggleTrackMute: (id: string) => void;
   toggleTrackVisibility: (id: string) => void;
 
-  // Elements
   addElement: (el: Omit<TimelineElement, "id">) => string;
   removeElements: (ids: string[]) => void;
   updateElement: (id: string, patch: Partial<TimelineElement>) => void;
   moveElement: (id: string, startTime: number, trackId?: string) => void;
+  resizeElement: (
+    id: string,
+    edge: "start" | "end",
+    newTime: number
+  ) => void;
   splitElement: (id: string, atTime: number) => void;
 
-  // Selection
   selectElements: (ids: string[]) => void;
   selectTrack: (id: string | null) => void;
   clearSelection: () => void;
 
-  // Playback
   setCurrentTime: (time: number) => void;
   setPlaying: (playing: boolean) => void;
   setVolume: (volume: number) => void;
   seek: (time: number) => void;
 
-  // Helpers
   getSelectedElements: () => TimelineElement[];
   recalculateDuration: () => void;
 }
 
 const defaultTracks: Track[] = [
-  { id: "track-v1", type: "video", name: "Video 1", muted: false, visible: true, locked: false, order: 0 },
-  { id: "track-a1", type: "audio", name: "Audio 1", muted: false, visible: true, locked: false, order: 1 },
+  {
+    id: "track-v1",
+    type: "video",
+    name: "Video 1",
+    muted: false,
+    visible: true,
+    locked: false,
+    order: 0,
+  },
+  {
+    id: "track-t1",
+    type: "text",
+    name: "Text 1",
+    muted: false,
+    visible: true,
+    locked: false,
+    order: 1,
+  },
+  {
+    id: "track-a1",
+    type: "audio",
+    name: "Audio 1",
+    muted: false,
+    visible: true,
+    locked: false,
+    order: 2,
+  },
 ];
 
 export const useEditorStore = create<EditorStore>((set, get) => ({
@@ -103,16 +127,39 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ),
     })),
 
+  addTextAsset: (text = "Your text here") => {
+    const id = nanoid();
+    set((s) => ({
+      media: [
+        ...s.media,
+        {
+          id,
+          type: "text",
+          name: text.slice(0, 24) || "Text",
+          src: "",
+          duration: 5,
+          text,
+          fontSize: 48,
+          fontColor: "#ffffff",
+          fontFamily: "Arial",
+        },
+      ],
+    }));
+    return id;
+  },
+
   addTrack: (type) => {
     const id = nanoid();
     const count = get().tracks.filter((t) => t.type === type).length + 1;
+    const label =
+      type === "video" ? "Video" : type === "audio" ? "Audio" : "Text";
     set((s) => ({
       tracks: [
         ...s.tracks,
         {
           id,
           type,
-          name: `${type === "video" ? "Video" : type === "audio" ? "Audio" : "Text"} ${count}`,
+          name: `${label} ${count}`,
           muted: false,
           visible: true,
           locked: false,
@@ -162,7 +209,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   removeElements: (ids) =>
     set((s) => ({
       elements: s.elements.filter((e) => !ids.includes(e.id)),
-      selectedElementIds: s.selectedElementIds.filter((id) => !ids.includes(id)),
+      selectedElementIds: s.selectedElementIds.filter(
+        (id) => !ids.includes(id)
+      ),
     })),
 
   updateElement: (id, patch) =>
@@ -176,10 +225,46 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((s) => ({
       elements: s.elements.map((e) =>
         e.id === id
-          ? { ...e, startTime: Math.max(0, startTime), ...(trackId ? { trackId } : {}) }
+          ? {
+              ...e,
+              startTime: Math.max(0, startTime),
+              ...(trackId ? { trackId } : {}),
+            }
           : e
       ),
     })),
+
+  resizeElement: (id, edge, newTime) => {
+    const el = get().elements.find((e) => e.id === id);
+    if (!el) return;
+
+    if (edge === "start") {
+      const end = el.startTime + el.duration;
+      const clamped = Math.max(0, Math.min(newTime, end - 0.1));
+      const delta = clamped - el.startTime;
+      set((s) => ({
+        elements: s.elements.map((e) =>
+          e.id === id
+            ? {
+                ...e,
+                startTime: clamped,
+                duration: end - clamped,
+                trimStart: Math.max(0, e.trimStart + delta),
+              }
+            : e
+        ),
+      }));
+    } else {
+      const clamped = Math.max(el.startTime + 0.1, newTime);
+      set((s) => ({
+        elements: s.elements.map((e) =>
+          e.id === id
+            ? { ...e, duration: clamped - e.startTime }
+            : e
+        ),
+      }));
+    }
+  },
 
   splitElement: (id, atTime) => {
     const el = get().elements.find((e) => e.id === id);

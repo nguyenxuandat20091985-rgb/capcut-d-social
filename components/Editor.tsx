@@ -18,7 +18,6 @@ export default function Editor() {
 
       <div className="min-h-0 flex-1">
         <ResizablePanelGroup direction="vertical" className="h-full">
-          {/* Main content: Media | Preview | Properties */}
           <ResizablePanel defaultSize={65} minSize={35}>
             <ResizablePanelGroup direction="horizontal" className="h-full">
               <ResizablePanel defaultSize={20} minSize={14} maxSize={35}>
@@ -47,7 +46,6 @@ export default function Editor() {
 
           <ResizableHandle className="h-1 bg-gray-800 transition-colors hover:bg-blue-500" />
 
-          {/* Timeline */}
           <ResizablePanel defaultSize={35} minSize={18} maxSize={55}>
             <div className="h-full border-t border-gray-800 bg-gray-900">
               <Timeline />

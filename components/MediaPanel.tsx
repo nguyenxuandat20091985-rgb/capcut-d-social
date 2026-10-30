@@ -1,14 +1,14 @@
 "use client";
 
 import { useEditorStore } from "@/lib/store";
-import { Upload, Film, Image, Music, Trash2 } from "lucide-react";
+import { Upload, Film, Image, Music, Type, Trash2 } from "lucide-react";
 import { useRef } from "react";
 import { cn } from "@/lib/utils";
 
 function getMediaDuration(file: File): Promise<number> {
   return new Promise((resolve) => {
     if (file.type.startsWith("image/")) {
-      resolve(5); // default 5s for images on timeline
+      resolve(5);
       return;
     }
     const url = URL.createObjectURL(file);
@@ -32,9 +32,52 @@ export default function MediaPanel() {
   const media = useEditorStore((s) => s.media);
   const tracks = useEditorStore((s) => s.tracks);
   const addMedia = useEditorStore((s) => s.addMedia);
+  const addTextAsset = useEditorStore((s) => s.addTextAsset);
   const removeMedia = useEditorStore((s) => s.removeMedia);
   const addElement = useEditorStore((s) => s.addElement);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const placeOnTimeline = (
+    mediaId: string,
+    type: "video" | "audio" | "image" | "text",
+    duration: number,
+    name: string,
+    textExtras?: { text?: string; fontSize?: number; fontColor?: string }
+  ) => {
+    const track =
+      tracks.find((t) => {
+        if (type === "audio") return t.type === "audio";
+        if (type === "text") return t.type === "text";
+        return t.type === "video";
+      }) ?? tracks[0];
+
+    if (!track) return;
+
+    const existingOnTrack = useEditorStore
+      .getState()
+      .elements.filter((e) => e.trackId === track.id);
+    const startTime = existingOnTrack.reduce(
+      (max, e) => Math.max(max, e.startTime + e.duration),
+      0
+    );
+
+    addElement({
+      mediaId,
+      trackId: track.id,
+      startTime,
+      duration,
+      trimStart: 0,
+      trimEnd: 0,
+      volume: 1,
+      opacity: 1,
+      scale: 1,
+      x: 0,
+      y: 0,
+      rotation: 0,
+      name,
+      ...textExtras,
+    });
+  };
 
   const handleFiles = async (files: FileList | null) => {
     if (!files) return;
@@ -61,43 +104,24 @@ export default function MediaPanel() {
         mimeType: file.type,
       });
 
-      // Auto-add to first matching track
-      const track =
-        tracks.find((t) =>
-          type === "audio" ? t.type === "audio" : t.type === "video"
-        ) ?? tracks[0];
-
-      if (track) {
-        const existingOnTrack = useEditorStore
-          .getState()
-          .elements.filter((e) => e.trackId === track.id);
-        const startTime = existingOnTrack.reduce(
-          (max, e) => Math.max(max, e.startTime + e.duration),
-          0
-        );
-
-        addElement({
-          mediaId: id,
-          trackId: track.id,
-          startTime,
-          duration,
-          trimStart: 0,
-          trimEnd: 0,
-          volume: 1,
-          opacity: 1,
-          scale: 1,
-          x: 0,
-          y: 0,
-          rotation: 0,
-          name: file.name,
-        });
-      }
+      placeOnTimeline(id, type, duration, file.name);
     }
+  };
+
+  const handleAddText = () => {
+    const text = "Your text here";
+    const id = addTextAsset(text);
+    placeOnTimeline(id, "text", 5, text, {
+      text,
+      fontSize: 48,
+      fontColor: "#ffffff",
+    });
   };
 
   const iconFor = (type: string) => {
     if (type === "video") return <Film size={14} />;
     if (type === "audio") return <Music size={14} />;
+    if (type === "text") return <Type size={14} />;
     return <Image size={14} />;
   };
 
@@ -116,10 +140,18 @@ export default function MediaPanel() {
 
       <button
         onClick={() => inputRef.current?.click()}
-        className="mb-3 flex w-full flex-col items-center gap-1 rounded-lg border border-dashed border-gray-600 py-6 text-sm text-gray-400 transition hover:border-blue-500 hover:text-blue-400"
+        className="mb-2 flex w-full flex-col items-center gap-1 rounded-lg border border-dashed border-gray-600 py-5 text-sm text-gray-400 transition hover:border-blue-500 hover:text-blue-400"
       >
-        <Upload size={20} />
+        <Upload size={18} />
         Upload Media
+      </button>
+
+      <button
+        onClick={handleAddText}
+        className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg border border-gray-700 py-2 text-sm text-gray-300 transition hover:border-amber-500 hover:text-amber-400"
+      >
+        <Type size={16} />
+        Add Text Overlay
       </button>
 
       <div className="flex-1 space-y-1 overflow-y-auto">
@@ -134,7 +166,9 @@ export default function MediaPanel() {
             )}
           >
             <span className="text-gray-500">{iconFor(item.type)}</span>
-            <span className="flex-1 truncate text-gray-300">{item.name}</span>
+            <span className="flex-1 truncate text-gray-300">
+              {item.type === "text" ? item.text ?? item.name : item.name}
+            </span>
             <span className="text-[10px] text-gray-600">
               {item.duration.toFixed(1)}s
             </span>
