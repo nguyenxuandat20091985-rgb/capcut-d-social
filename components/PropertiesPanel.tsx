@@ -265,6 +265,20 @@ export default function PropertiesPanel() {
           className="w-full"
         />
       </Field>
+      {(isVideo || isImage) && (
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => updateElement(el.id, { flipH: !el.flipH })}
+            aria-pressed={Boolean(el.flipH)}
+            className={`rounded-md border px-2 py-2 text-xs ${el.flipH ? "border-blue-500 bg-blue-600 text-white" : "border-gray-700 bg-gray-800 text-gray-300"}`}>
+            Lật ngang {el.flipH ? "✓" : ""}
+          </button>
+          <button type="button" onClick={() => updateElement(el.id, { flipV: !el.flipV })}
+            aria-pressed={Boolean(el.flipV)}
+            className={`rounded-md border px-2 py-2 text-xs ${el.flipV ? "border-blue-500 bg-blue-600 text-white" : "border-gray-700 bg-gray-800 text-gray-300"}`}>
+            Lật dọc {el.flipV ? "✓" : ""}
+          </button>
+        </div>
+      )}
 
       {(isVideo || isImage) && (
         <>
