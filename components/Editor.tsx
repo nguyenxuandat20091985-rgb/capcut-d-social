@@ -1,9 +1,9 @@
 "use client";
 
 import {
-  ResizablePanelGroup,
-  ResizablePanel,
-  ResizableHandle,
+  PanelGroup as ResizablePanelGroup,
+  Panel as ResizablePanel,
+  PanelResizeHandle as ResizableHandle,
 } from "react-resizable-panels";
 import Preview from "./Preview";
 import Timeline from "./Timeline";
