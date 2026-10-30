@@ -73,6 +73,13 @@ Các hàm `saveCloudProject`, `loadCloudProject`, `uploadCloudAsset`, `getCloudA
 
 **Lưu ý:** Cloud Save cần cấu hình URL/anon key và Supabase Auth email/password được bật. Email confirmation có thể cần xác minh email trước lần đăng nhập đầu. Mỗi media cloud bị giới hạn 50 MiB; file lớn hơn vẫn có thể lưu local và cần giảm dung lượng trước khi đồng bộ. Không dùng service-role key để né RLS.
 
+## Giới hạn hiện tại
+
+- Kho nhạc là thư viện âm thanh người dùng tự nhập từ thiết bị; repo không tự phân phối nhạc thương mại hoặc nhạc chưa rõ giấy phép.
+- Mỗi file đồng bộ lên Cloud tối đa 50 MiB theo giới hạn bucket.
+- Âm thanh nằm sẵn trong video được phát trong Preview; chọn **Tách audio** để tạo track âm thanh riêng và đưa vào file export.
+- AI auto-caption, TTS, xóa nền AI và motion tracking chưa được triển khai trong phiên bản này. Không hiển thị các nút giả cho những dịch vụ chưa cấu hình.
+
 ## Kiểm tra CI
 
 GitHub Actions workflow `.github/workflows/ci.yml` chạy `npm install` và `npm run build` khi push, pull request hoặc chạy thủ công.
