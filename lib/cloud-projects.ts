@@ -94,6 +94,7 @@ export async function uploadCloudAsset(
   accessToken: string
 ) {
   const { url, anonKey } = supabaseConfig();
+  if (file.size > 50 * 1024 * 1024) throw new Error("Gói Supabase Free hiện giới hạn mỗi media cloud ở 50 MB.");
   const mimeType = getFileMimeType(file, assetType);
   const storagePath = `${userId}/${projectId}/${assetId}-${safeStorageName(file.name)}`;
   const objectUrl = `${url}/storage/v1/object/project-assets/${encodeStoragePath(storagePath)}`;
