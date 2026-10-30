@@ -329,7 +329,8 @@ export async function exportProject(
       const textY = Math.max(-100, Math.min(100, el.y ?? 0));
       const slideDuration = Math.max(0, Math.min(el.duration, el.transitionDuration ?? 0.5));
       const slideDirection = el.transitionIn === "slide-left" ? 1 : el.transitionIn === "slide-right" ? -1 : 0;
-      const textFadeIn = Math.max(0, Math.min(el.duration, el.fadeIn ?? 0));
+      const textTransitionFade = el.transitionIn === "fade" || el.transitionIn === "dissolve" ? (el.transitionDuration ?? 0) : 0;
+      const textFadeIn = Math.max(0, Math.min(el.duration, el.fadeIn ?? 0, textTransitionFade || el.fadeIn || 0));
       const textFadeOut = Math.max(0, Math.min(el.duration, el.fadeOut ?? 0));
       let textAlpha = textOpacity.toFixed(3);
       if (textFadeIn > 0) textAlpha += `*if(lt(t,${start}+${textFadeIn.toFixed(3)}),max(0,(t-${start})/${textFadeIn.toFixed(3)}),1)`;
@@ -373,6 +374,13 @@ export async function exportProject(
     if (clipScale !== 1) chain += `,scale=w='max(1,iw*${clipScale.toFixed(3)})':h='max(1,ih*${clipScale.toFixed(3)})'`;
     if (clipRotation !== 0) chain += `,rotate=${clipRotation.toFixed(5)}:ow=rotw(iw):oh=roth(ih):c=black@0`;
     if (clipOpacity < 1) chain += `,colorchannelmixer=aa=${clipOpacity.toFixed(3)}`;
+    const transitionFade = el.transitionIn === "fade" || el.transitionIn === "dissolve"
+      ? (el.transitionDuration ?? 0)
+      : 0;
+    const visualFadeIn = Math.max(0, Math.min(el.duration, el.fadeIn ?? 0, transitionFade || el.fadeIn || 0));
+    const visualFadeOut = Math.max(0, Math.min(el.duration, el.fadeOut ?? 0));
+    if (visualFadeIn > 0) chain += `,fade=t=in:st=${start.toFixed(3)}:d=${visualFadeIn.toFixed(3)}:alpha=1`;
+    if (visualFadeOut > 0) chain += `,fade=t=out:st=${(end - visualFadeOut).toFixed(3)}:d=${visualFadeOut.toFixed(3)}:alpha=1`;
 
     // Apply non-destructive color controls consistently with the live Preview.
     const brightness = Math.max(0, Math.min(2, el.brightness ?? 1));
