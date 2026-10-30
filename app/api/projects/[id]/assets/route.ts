@@ -86,11 +86,11 @@ export async function POST(request: Request, { params }: RouteContext) {
     return Response.json({ error: "Chưa tìm thấy file trong Storage. Hãy upload file trực tiếp lên bucket trước khi đăng ký metadata." }, { status: 409 });
   }
 
-  const insert = await fetch(supabaseRestUrl(auth.context, "project_assets"), {
+  const insert = await fetch(supabaseRestUrl(auth.context, "project_assets?on_conflict=id"), {
     method: "POST",
     headers: supabaseHeaders(auth.context, {
       "content-type": "application/json",
-      Prefer: "return=representation",
+      Prefer: "resolution=merge-duplicates,return=representation",
     }),
     body: JSON.stringify({
       id: body.assetId,
