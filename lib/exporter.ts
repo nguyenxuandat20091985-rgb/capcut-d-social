@@ -331,7 +331,7 @@ export async function exportProject(
       const textXExpr = motionExpression(el, "x", textX);
       const textYExpr = motionExpression(el, "y", textY);
       const hasMotionKeyframes = (el.keyframes?.length ?? 0) > 0;
-      const textRotation = (el.rotation ?? 0) * Math.PI / 180;
+      const textRotationExpr = motionExpression(el, "rotation", el.rotation ?? 0);
       const slideDuration = Math.max(0, Math.min(el.duration, el.transitionDuration ?? 0.5));
       const slideDirection = el.transitionIn === "slide-left" ? 1 : el.transitionIn === "slide-right" ? -1 : 0;
       const textTransitionFade = el.transitionIn === "fade" || el.transitionIn === "dissolve" ? (el.transitionDuration ?? 0) : 0;
@@ -346,7 +346,7 @@ export async function exportProject(
       let textChain = `color=c=black@0:s=${width}x${height}:d=${duration}:r=${fps},format=yuva420p,drawtext=text='${txt}'${fontOpt}:fontsize=${fs}:fontcolor=0x${fc}:alpha='${textAlpha}':x=(w-text_w)/2:y=(h-text_h)/2`;
       if (hasMotionKeyframes) textChain += `,scale=w='max(1,iw*(${textScaleExpr}))':h='max(1,ih*(${textScaleExpr}))':eval=frame`;
       else if (textScale !== 1) textChain += `,scale=w='max(1,iw*${textScale.toFixed(3)})':h='max(1,ih*${textScale.toFixed(3)})'`;
-      if (textRotation !== 0) textChain += `,rotate=${textRotation.toFixed(5)}:ow=rotw(iw):oh=roth(ih):c=black@0`;
+      if ((el.rotation ?? 0) !== 0 || (el.keyframes?.some((frame) => frame.rotation !== undefined) ?? false)) textChain += `,rotate='(${textRotationExpr})*PI/180':ow=rotw(iw):oh=roth(ih):c=black@0`;
       filterParts.push(`${textChain}[${textLayer}]`);
 
       const baseTextX = `(W-w)/2+(${textXExpr}/100)*W`;
@@ -372,7 +372,7 @@ export async function exportProject(
     // Scale + pad
     const speed = Math.max(0.5, Math.min(2, el.speed ?? 1));
     const clipScale = Math.max(0.1, Math.min(3, el.scale ?? 1));
-    const clipRotation = (el.rotation ?? 0) * Math.PI / 180;
+    const clipRotationExpr = motionExpression(el, "rotation", el.rotation ?? 0);
     const clipOpacity = Math.max(0, Math.min(1, el.opacity ?? 1));
     const positionX = Math.max(-100, Math.min(100, el.x ?? 0));
     const positionY = Math.max(-100, Math.min(100, el.y ?? 0));
@@ -380,9 +380,11 @@ export async function exportProject(
     const positionYExpr = motionExpression(el, "y", positionY);
     const hasMotionKeyframes = (el.keyframes?.length ?? 0) > 0;
     let chain = `[${inIdx}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,format=yuva420p,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black@0,setpts=(PTS-STARTPTS)/${speed.toFixed(3)}+${start}/TB`;
+    if (el.flipH) chain += `,hflip`;
+    if (el.flipV) chain += `,vflip`;
     if (hasMotionKeyframes) chain += `,scale=w='max(1,iw*(${motionExpression(el, "scale", clipScale)}))':h='max(1,ih*(${motionExpression(el, "scale", clipScale)}))':eval=frame`;
     else if (clipScale !== 1) chain += `,scale=w='max(1,iw*${clipScale.toFixed(3)})':h='max(1,ih*${clipScale.toFixed(3)})'`;
-    if (clipRotation !== 0) chain += `,rotate=${clipRotation.toFixed(5)}:ow=rotw(iw):oh=roth(ih):c=black@0`;
+    if ((el.rotation ?? 0) !== 0 || (el.keyframes?.some((frame) => frame.rotation !== undefined) ?? false)) chain += `,rotate='(${clipRotationExpr})*PI/180':ow=rotw(iw):oh=roth(ih):c=black@0`;
     if (clipOpacity < 1) chain += `,colorchannelmixer=aa=${clipOpacity.toFixed(3)}`;
     const transitionFade = el.transitionIn === "fade" || el.transitionIn === "dissolve"
       ? (el.transitionDuration ?? 0)

@@ -86,6 +86,7 @@ export default function PropertiesPanel() {
       x: el.x ?? 0,
       y: el.y ?? 0,
       scale: el.scale ?? 1,
+      rotation: el.rotation ?? 0,
     };
     const next = [...keyframes.filter((item) => Math.abs(item.time - frame.time) > 0.04), frame]
       .sort((a, b) => a.time - b.time);
@@ -264,6 +265,20 @@ export default function PropertiesPanel() {
           className="w-full"
         />
       </Field>
+      {(isVideo || isImage) && (
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => updateElement(el.id, { flipH: !el.flipH })}
+            aria-pressed={Boolean(el.flipH)}
+            className={`rounded-md border px-2 py-2 text-xs ${el.flipH ? "border-blue-500 bg-blue-600 text-white" : "border-gray-700 bg-gray-800 text-gray-300"}`}>
+            Lật ngang {el.flipH ? "✓" : ""}
+          </button>
+          <button type="button" onClick={() => updateElement(el.id, { flipV: !el.flipV })}
+            aria-pressed={Boolean(el.flipV)}
+            className={`rounded-md border px-2 py-2 text-xs ${el.flipV ? "border-blue-500 bg-blue-600 text-white" : "border-gray-700 bg-gray-800 text-gray-300"}`}>
+            Lật dọc {el.flipV ? "✓" : ""}
+          </button>
+        </div>
+      )}
 
       {(isVideo || isImage) && (
         <>
@@ -341,14 +356,14 @@ export default function PropertiesPanel() {
             + Keyframe tại {localTime.toFixed(2)}s
           </button>
           {keyframes.length === 0 ? (
-            <p className="mb-2 text-[10px] text-gray-600">Đặt keyframe ở các thời điểm khác nhau để tạo chuyển động vị trí và phóng to/thu nhỏ.</p>
+            <p className="mb-2 text-[10px] text-gray-600">Đặt keyframe ở các thời điểm khác nhau để tạo chuyển động vị trí, phóng to/thu nhỏ và xoay clip.</p>
           ) : (
             <div className="mb-2 space-y-1">
               {[...keyframes].sort((a, b) => a.time - b.time).map((frame) => (
                 <div key={frame.time} className="flex items-center gap-2 rounded bg-gray-900 px-2 py-1.5">
                   <button type="button" onClick={() => seek(el.startTime + frame.time)}
                     className="flex-1 text-left text-[10px] text-blue-300 hover:text-blue-200">
-                    ◆ {frame.time.toFixed(2)}s · X {frame.x.toFixed(0)}% · Y {frame.y.toFixed(0)}% · {frame.scale.toFixed(2)}×
+                    ◆ {frame.time.toFixed(2)}s · X {frame.x.toFixed(0)}% · Y {frame.y.toFixed(0)}% · {frame.scale.toFixed(2)}× · xoay {(frame.rotation ?? el.rotation ?? 0).toFixed(0)}°
                   </button>
                   <button type="button" aria-label={`Xóa keyframe ${frame.time.toFixed(2)}s`}
                     onClick={() => updateElement(el.id, { keyframes: keyframes.filter((item) => item.time !== frame.time) })}

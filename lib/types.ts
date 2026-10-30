@@ -29,6 +29,8 @@ export interface ClipKeyframe {
   x: number;
   y: number;
   scale: number;
+  /** Optional for backward compatibility with earlier saved projects. */
+  rotation?: number;
 }
 
 export interface TimelineElement {
@@ -45,6 +47,9 @@ export interface TimelineElement {
   x: number;
   y: number;
   rotation: number;
+  /** Non-destructive horizontal/vertical flip. Optional for old project files. */
+  flipH?: boolean;
+  flipV?: boolean;
   /** Non-destructive image/video adjustments */
   brightness: number;
   contrast: number;

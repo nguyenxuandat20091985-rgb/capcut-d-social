@@ -2,7 +2,7 @@
 
 import { useEditorStore } from "@/lib/store";
 import { formatTime, cn } from "@/lib/utils";
-import { Plus, Volume2, VolumeX, Eye, EyeOff } from "lucide-react";
+import { Plus, Volume2, VolumeX, Eye, EyeOff, Lock, Unlock, Trash2 } from "lucide-react";
 import { useRef, useCallback, useState, useEffect } from "react";
 
 const PIXELS_PER_SECOND = 40;
@@ -22,6 +22,9 @@ export default function Timeline() {
   const selectElements = useEditorStore((s) => s.selectElements);
   const addTrack = useEditorStore((s) => s.addTrack);
   const toggleTrackMute = useEditorStore((s) => s.toggleTrackMute);
+  const toggleTrackLocked = useEditorStore((s) => s.toggleTrackLocked);
+  const setTrackName = useEditorStore((s) => s.setTrackName);
+  const removeTrack = useEditorStore((s) => s.removeTrack);
   const toggleTrackVisibility = useEditorStore((s) => s.toggleTrackVisibility);
   const removeElements = useEditorStore((s) => s.removeElements);
   const splitElement = useEditorStore((s) => s.splitElement);
@@ -98,6 +101,7 @@ export default function Timeline() {
     e.stopPropagation();
     e.preventDefault();
 
+    if (tracks.find((track) => track.id === trackId)?.locked) return;
     const target = e.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
     const localX = e.clientX - rect.left;
@@ -218,14 +222,42 @@ export default function Timeline() {
               )}
               style={{ height: TRACK_HEIGHT }}
             >
-              <span className="flex-1 truncate text-xs text-gray-300">
+              <button
+                type="button"
+                className="min-w-0 flex-1 truncate text-left text-xs text-gray-300 hover:text-white"
+                title="Nhấn để đổi tên track"
+                onClick={() => {
+                  const nextName = window.prompt("Tên track mới:", track.name);
+                  if (nextName !== null) setTrackName(track.id, nextName);
+                }}
+              >
                 {track.name}
-              </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleTrackLocked(track.id)}
+                className={cn("rounded p-0.5 hover:text-white", track.locked ? "text-amber-400" : "text-gray-500")}
+                title={track.locked ? "Mở khóa track" : "Khóa track"}
+                aria-label={track.locked ? "Mở khóa track" : "Khóa track"}
+              >
+                {track.locked ? <Lock size={12} /> : <Unlock size={12} />}
+              </button>
               <button
                 onClick={() => toggleTrackMute(track.id)}
                 className="rounded p-0.5 text-gray-500 hover:text-white"
               >
                 {track.muted ? <VolumeX size={12} /> : <Volume2 size={12} />}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm(`Xóa track "${track.name}" và tất cả clip trên track này?`)) removeTrack(track.id);
+                }}
+                className="rounded p-0.5 text-gray-500 hover:text-red-400"
+                title="Xóa track"
+                aria-label="Xóa track"
+              >
+                <Trash2 size={12} />
               </button>
               <button
                 onClick={() => toggleTrackVisibility(track.id)}
@@ -305,6 +337,7 @@ export default function Timeline() {
                         }
                         className={cn(
                           "absolute top-1 flex cursor-grab touch-none select-none items-center overflow-hidden rounded px-1.5 text-[10px] font-medium text-white shadow active:cursor-grabbing",
+                          track.locked && "cursor-not-allowed opacity-60",
                           isText
                             ? "bg-amber-600/90"
                             : isAudio
@@ -327,7 +360,7 @@ export default function Timeline() {
                           backgroundSize: "cover",
                           backgroundPosition: "center",
                         }}
-                        title="Kéo để di chuyển / đổi track · Kéo cạnh để resize"
+                        title={track.locked ? "Track đã khóa" : "Kéo để di chuyển / đổi track · Kéo cạnh để resize"}
                       >
                         <span className="absolute left-0 top-0 h-full w-1.5 cursor-ew-resize bg-white/20" />
                         <span className="absolute right-0 top-0 h-full w-1.5 cursor-ew-resize bg-white/20" />
