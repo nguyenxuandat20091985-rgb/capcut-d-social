@@ -114,7 +114,7 @@ export default function CloudProjectsPanel() {
         try {
           const blob = await getMediaFile(asset.id);
           if (!blob) {
-            if (!asset.src) skipped++;
+            if (!asset.src || asset.src.startsWith("blob:")) skipped++;
             continue;
           }
           const uploadFile = new File([blob], asset.name, {
