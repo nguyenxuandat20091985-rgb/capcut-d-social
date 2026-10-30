@@ -13,6 +13,7 @@ Trình chỉnh sửa video social độc lập, xây dựng bằng Next.js 15, R
 | Color & effects | Brightness, contrast, saturation, hue, blur; preset Gốc/Rực rỡ/Ấm/Lạnh/Đen trắng/Mềm |
 | Speed | 0.5x–2x cho video và audio, đồng bộ Preview và export |
 | Transform | Canvas-relative position, scale, rotation, opacity được áp dụng khi export |
+| Motion keyframes | Tạo keyframe tại playhead, nội suy vị trí X/Y và scale trong Preview và export |
 | Audio | Kho nhạc do người dùng nhập, nghe thử, nhiều track, volume/fade theo clip và track, tách audio từ video |
 | Export | MP4 720p/1080p bằng FFmpeg.wasm; trim, speed, transforms, filters, audio mix/fade; lỗi encode được báo rõ, không tạo video nền giả |
 | Cloud | Supabase email/password sign-in, refresh session, lưu/mở project và đồng bộ media trong private Storage bucket (50 MiB/file) |
