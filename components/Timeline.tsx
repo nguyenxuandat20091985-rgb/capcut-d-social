@@ -2,7 +2,7 @@
 
 import { useEditorStore } from "@/lib/store";
 import { formatTime, cn } from "@/lib/utils";
-import { Plus, Volume2, VolumeX, Eye, EyeOff, Lock, Unlock, Trash2, Pencil } from "lucide-react";
+import { Plus, Volume2, VolumeX, Eye, EyeOff, Lock, Unlock, Trash2 } from "lucide-react";
 import { useRef, useCallback, useState, useEffect } from "react";
 
 const PIXELS_PER_SECOND = 40;
