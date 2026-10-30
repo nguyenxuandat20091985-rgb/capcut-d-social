@@ -283,8 +283,9 @@ export async function exportProject(
       inputArgs.push("-loop", "1", "-t", String(el.duration), "-i", fname);
     } else {
       // Seek and bound each placed instance independently so trim handles affect export.
+      const speed = Math.max(0.5, Math.min(2, el.speed ?? 1));
       if ((el.trimStart || 0) > 0) inputArgs.push("-ss", String(el.trimStart));
-      inputArgs.push("-t", String(el.duration), "-i", fname);
+      inputArgs.push("-t", String(el.duration * speed), "-i", fname);
     }
     elInputIndex.set(el.id, nextInput);
     nextInput++;
@@ -302,8 +303,9 @@ export async function exportProject(
     const asset = media.find((m) => m.id === el.mediaId);
     const fname = asset ? fileMap.get(asset.id) : undefined;
     if (!fname) continue;
+    const speed = Math.max(0.5, Math.min(2, el.speed ?? 1));
     if ((el.trimStart || 0) > 0) inputArgs.push("-ss", String(el.trimStart));
-    inputArgs.push("-t", String(el.duration), "-i", fname);
+    inputArgs.push("-t", String(el.duration * speed), "-i", fname);
     audioInputIndex.set(el.id, nextInput++);
   }
 
@@ -342,7 +344,8 @@ export async function exportProject(
     const out = `ov${overlayIdx}`;
 
     // Scale + pad
-    let chain = `[${inIdx}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,format=yuva420p,setpts=PTS-STARTPTS+${start}/TB`;
+    const speed = Math.max(0.5, Math.min(2, el.speed ?? 1));
+    let chain = `[${inIdx}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,format=yuva420p,setpts=(PTS-STARTPTS)/${speed.toFixed(3)}+${start}/TB`;
 
     // Apply non-destructive color controls consistently with the live Preview.
     const brightness = Math.max(0, Math.min(2, el.brightness ?? 1));
@@ -397,10 +400,12 @@ export async function exportProject(
     if (inputIndex === undefined) continue;
     const track = tracks.find((t) => t.id === el.trackId);
     const volume = Math.max(0, Math.min(4, (el.volume ?? 1) * (track?.volume ?? 1)));
+    const speed = Math.max(0.5, Math.min(2, el.speed ?? 1));
+    const sourceDuration = el.duration * speed;
     const delayMs = Math.max(0, Math.round(el.startTime * 1000));
     const label = `aud${audioIndex++}`;
     audioFilterParts.push(
-      `[${inputIndex}:a]atrim=start=0:duration=${el.duration.toFixed(3)},asetpts=PTS-STARTPTS,volume=${volume.toFixed(3)},adelay=${delayMs}:all=1[${label}]`
+      `[${inputIndex}:a]atrim=start=0:duration=${sourceDuration.toFixed(3)},asetpts=PTS-STARTPTS,atempo=${speed.toFixed(3)},volume=${volume.toFixed(3)},adelay=${delayMs}:all=1[${label}]`
     );
   }
   if (audioIndex > 0) {
