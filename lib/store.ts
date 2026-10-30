@@ -501,8 +501,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           ...e,
         })),
         media: (saved.media as MediaAsset[]).map((m) => ({
-          src: m.src || "",
           ...m,
+          src: m.src || "",
         })),
         hydrated: true,
       });
