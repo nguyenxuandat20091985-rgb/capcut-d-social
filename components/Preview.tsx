@@ -120,7 +120,7 @@ export default function Preview() {
                     className="pointer-events-none absolute inset-0 flex items-center justify-center"
                     style={{
                       opacity,
-                      transform: `translate(${motion.x + slideX}%, ${motion.y}%) scale(${motion.scale}) rotate(${motion.rotation}deg)`,
+                      transform: `translate(${motion.x + slideX}%, ${motion.y}%) scale(${el.flipH ? -motion.scale : motion.scale}, ${el.flipV ? -motion.scale : motion.scale}) rotate(${motion.rotation}deg)`,
                     }}
                   >
                     <span
