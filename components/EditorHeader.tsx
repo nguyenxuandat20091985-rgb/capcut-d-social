@@ -23,6 +23,7 @@ import {
 import { useState, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { restoreMediaSources } from "@/lib/media-db";
+import CloudProjectsPanel from "./CloudProjectsPanel";
 
 const PHASE_LABEL: Record<ExportPhase, string> = {
   idle: "",
@@ -229,6 +230,8 @@ export default function EditorHeader() {
           >
             <Redo2 size={16} />
           </button>
+
+          <CloudProjectsPanel />
 
           <button
             onClick={handleSave}
