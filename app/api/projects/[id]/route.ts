@@ -1,4 +1,4 @@
-import { getSupabaseContext, supabaseHeaders, supabaseRestUrl } from "@/lib/supabase-rest";
+import { encodeStoragePath, getSupabaseContext, storageObjectUrl, supabaseHeaders, supabaseRestUrl } from "@/lib/supabase-rest";
 
 export const runtime = "nodejs";
 
@@ -54,6 +54,36 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 export async function DELETE(request: Request, { params }: RouteContext) {
   const auth = await getSupabaseContext(request);
   if (auth.error) return auth.error;
+
+  const assetQuery = new URLSearchParams({
+    project_id: `eq.${params.id}`,
+    select: "storage_path",
+  });
+  const assetsResponse = await fetch(
+    supabaseRestUrl(auth.context, `project_assets?${assetQuery}`),
+    { headers: supabaseHeaders(auth.context), cache: "no-store" }
+  );
+  if (!assetsResponse.ok) {
+    return Response.json({ error: await assetsResponse.text() }, { status: assetsResponse.status });
+  }
+  const assets = await assetsResponse.json() as Array<{ storage_path: string }>;
+  for (const asset of assets) {
+    const objectUrl = storageObjectUrl(
+      auth.context,
+      `object/project-assets/${encodeStoragePath(asset.storage_path)}`
+    );
+    const removed = await fetch(objectUrl, {
+      method: "DELETE",
+      headers: supabaseHeaders(auth.context),
+      cache: "no-store",
+    });
+    if (!removed.ok) {
+      return Response.json(
+        { error: "Không xóa được một media trong Storage; project chưa bị xóa.", detail: await removed.text() },
+        { status: 502 }
+      );
+    }
+  }
 
   const query = new URLSearchParams({ id: `eq.${params.id}` });
   const response = await fetch(supabaseRestUrl(auth.context, `projects?${query}`), {
