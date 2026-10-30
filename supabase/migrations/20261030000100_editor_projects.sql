@@ -31,6 +31,9 @@ create index if not exists project_assets_project_idx
 alter table public.projects enable row level security;
 alter table public.project_assets enable row level security;
 
+grant select, insert, update, delete on public.projects to authenticated;
+grant select, insert, update, delete on public.project_assets to authenticated;
+
 drop policy if exists "Users manage their own projects" on public.projects;
 create policy "Users manage their own projects"
   on public.projects for all to authenticated
@@ -62,7 +65,7 @@ values (
   'project-assets',
   'project-assets',
   false,
-  524288000,
+  52428800,
   array['video/mp4','video/quicktime','video/webm','audio/mpeg','audio/mp4','audio/wav','audio/aac','image/jpeg','image/png','image/webp','image/gif']
 )
 on conflict (id) do update set
