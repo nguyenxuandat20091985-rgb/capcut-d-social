@@ -254,10 +254,29 @@ export async function exportProject(
     if (asset.type === "image") {
       inputArgs.push("-loop", "1", "-t", String(el.duration), "-i", fname);
     } else {
-      inputArgs.push("-i", fname);
+      // Seek and bound each placed instance independently so trim handles affect export.
+      if ((el.trimStart || 0) > 0) inputArgs.push("-ss", String(el.trimStart));
+      inputArgs.push("-t", String(el.duration), "-i", fname);
     }
     elInputIndex.set(el.id, nextInput);
     nextInput++;
+  }
+
+  // Audio clips are separate inputs; their trim, timeline offset and clip/track
+  // volume are applied in the audio filter graph below.
+  const audioEls = sorted.filter((el) => {
+    const asset = media.find((m) => m.id === el.mediaId);
+    const track = tracks.find((t) => t.id === el.trackId);
+    return asset?.type === "audio" && track?.visible !== false && track?.muted !== true;
+  });
+  const audioInputIndex = new Map<string, number>();
+  for (const el of audioEls) {
+    const asset = media.find((m) => m.id === el.mediaId);
+    const fname = asset ? fileMap.get(asset.id) : undefined;
+    if (!fname) continue;
+    if ((el.trimStart || 0) > 0) inputArgs.push("-ss", String(el.trimStart));
+    inputArgs.push("-t", String(el.duration), "-i", fname);
+    audioInputIndex.set(el.id, nextInput++);
   }
 
   let lastLabel = "0:v";
@@ -331,8 +350,28 @@ export async function exportProject(
 
   report("encoding", 40, `Đang encode ${options.resolution}…`);
 
-  const filterComplex =
-    filterParts.length > 0 ? filterParts.join(";") : null;
+  const audioFilterParts: string[] = [];
+  let audioIndex = 0;
+  for (const el of audioEls) {
+    const inputIndex = audioInputIndex.get(el.id);
+    if (inputIndex === undefined) continue;
+    const track = tracks.find((t) => t.id === el.trackId);
+    const volume = Math.max(0, Math.min(4, (el.volume ?? 1) * (track?.volume ?? 1)));
+    const delayMs = Math.max(0, Math.round(el.startTime * 1000));
+    const label = `aud${audioIndex++}`;
+    audioFilterParts.push(
+      `[${inputIndex}:a]atrim=start=0:duration=${el.duration.toFixed(3)},asetpts=PTS-STARTPTS,volume=${volume.toFixed(3)},adelay=${delayMs}:all=1[${label}]`
+    );
+  }
+  if (audioIndex > 0) {
+    const labels = Array.from({ length: audioIndex }, (_, i) => `[aud${i}]`).join("");
+    audioFilterParts.push(
+      `${labels}amix=inputs=${audioIndex}:duration=longest:dropout_transition=0,apad,atrim=duration=${duration.toFixed(3)}[aout]`
+    );
+  }
+
+  const allFilters = [...filterParts, ...audioFilterParts];
+  const filterComplex = allFilters.length > 0 ? allFilters.join(";") : null;
 
   const outName = `output.${options.format}`;
   const args: string[] = [
@@ -340,6 +379,7 @@ export async function exportProject(
     ...(filterComplex
       ? ["-filter_complex", filterComplex, "-map", `[${lastLabel}]`]
       : ["-map", "0:v"]),
+    ...(audioIndex > 0 ? ["-map", "[aout]", "-c:a", "aac", "-b:a", "192k"] : ["-an"]),
     "-c:v",
     options.format === "webm" ? "libvpx-vp9" : "libx264",
     "-pix_fmt",
@@ -352,8 +392,7 @@ export async function exportProject(
     crfFor(options.quality),
     "-preset",
     "ultrafast",
-    "-movflags",
-    "+faststart",
+    ...(options.format === "mp4" ? ["-movflags", "+faststart"] : []),
     outName,
   ];
 
@@ -362,32 +401,20 @@ export async function exportProject(
     report("encoding", pct, `Đang encode… ${pct}%`);
   });
 
-  try {
-    await ffmpeg.exec(args);
-  } catch (err) {
-    onLog?.(`FFmpeg exec error: ${err}`);
-    report("encoding", 70, "Thử encode fallback…");
-    await ffmpeg.exec([
-      "-f",
-      "lavfi",
-      "-i",
-      `color=c=0x${bgColor}:s=${width}x${height}:d=${Math.min(duration, 3)}:r=${fps}`,
-      "-c:v",
-      "libx264",
-      "-pix_fmt",
-      "yuv420p",
-      "-t",
-      String(Math.min(duration, 3)),
-      outName,
-    ]);
+  const exitCode = await ffmpeg.exec(args);
+  if (exitCode !== 0) {
+    throw new Error(`FFmpeg export failed (exit code ${exitCode}). Không tạo file MP4 giả hoặc video nền thay thế.`);
   }
 
   report("finishing", 95, "Đang đóng gói file…");
 
   const data = await ffmpeg.readFile(outName);
+  const outputBytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
+  if (outputBytes.byteLength < 1024) {
+    throw new Error("File xuất quá nhỏ hoặc rỗng. Vui lòng kiểm tra media và thử lại.");
+  }
   const mime =
     options.format === "webm" ? "video/webm" : "video/mp4";
-  const outputBytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
   // Copy into a standalone ArrayBuffer to satisfy BlobPart typing across TS/DOM versions.
   const blob = new Blob([Uint8Array.from(outputBytes).buffer], { type: mime });
 
