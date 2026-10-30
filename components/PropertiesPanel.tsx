@@ -267,6 +267,13 @@ export default function PropertiesPanel() {
 
       {(isVideo || isAudio) && (
         <>
+          <Section title="Tốc độ" />
+          <Field label={`Playback speed (${(el.speed ?? 1).toFixed(2)}×)`}>
+            <input type="range" min={0.5} max={2} step={0.05} value={el.speed ?? 1}
+              onChange={(e) => updateElement(el.id, { speed: parseFloat(e.target.value) })}
+              className="w-full" />
+          </Field>
+          <div className="mb-3 flex justify-between text-[10px] text-gray-600"><span>0.5× Chậm</span><span>1×</span><span>2× Nhanh</span></div>
           <Section title="Âm thanh" />
           <Field label={`Volume (${Math.round((el.volume ?? 1) * 100)}%)`}>
             <input
