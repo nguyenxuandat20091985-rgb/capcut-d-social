@@ -21,8 +21,12 @@ function generateThumbnail(file: File): Promise<string | undefined> {
       canvas.height = Math.max(1, Math.round(height * scale));
       const context = canvas.getContext("2d");
       if (!context) return finish();
-      context.drawImage(source, 0, 0, canvas.width, canvas.height);
-      finish(canvas.toDataURL("image/jpeg", 0.68));
+      try {
+        context.drawImage(source, 0, 0, canvas.width, canvas.height);
+        finish(canvas.toDataURL("image/jpeg", 0.68));
+      } catch {
+        finish();
+      }
     };
 
     if (file.type.startsWith("image/")) {
