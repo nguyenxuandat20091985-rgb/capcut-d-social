@@ -46,7 +46,13 @@ export async function GET(request: Request, { params }: RouteContext) {
     return Response.json({ error: "Không tạo được link tải media.", detail: await signed.text() }, { status: signed.status });
   }
   const result = await signed.json() as { signedURL?: string; signedUrl?: string };
-  const signedUrl = result.signedURL ?? result.signedUrl;
+  const rawSignedUrl = result.signedURL ?? result.signedUrl;
+  if (!rawSignedUrl) return Response.json({ error: "Supabase không trả về signed URL." }, { status: 502 });
+  const signedUrl = /^https?:\\/\\//i.test(rawSignedUrl)
+    ? rawSignedUrl
+    : rawSignedUrl.startsWith("/storage/v1/")
+      ? `${found.context.url}${rawSignedUrl}`
+      : `${found.context.url}/storage/v1${rawSignedUrl.startsWith("/") ? "" : "/"}${rawSignedUrl}`;
   return Response.json({ asset: found.asset, signedUrl });
 }
 
