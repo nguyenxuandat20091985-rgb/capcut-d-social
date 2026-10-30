@@ -376,10 +376,11 @@ export async function exportProject(
   const outName = `output.${options.format}`;
   const args: string[] = [
     ...inputArgs,
-    ...(filterComplex
-      ? ["-filter_complex", filterComplex, "-map", `[${lastLabel}]`]
-      : ["-map", "0:v"]),
-    ...(audioIndex > 0 ? ["-map", "[aout]", "-c:a", "aac", "-b:a", "192k"] : ["-an"]),
+    ...(filterComplex ? ["-filter_complex", filterComplex] : []),
+    ...(filterParts.length > 0 ? ["-map", `[${lastLabel}]`] : ["-map", "0:v"]),
+    ...(audioIndex > 0
+      ? ["-map", "[aout]", "-c:a", options.format === "webm" ? "libopus" : "aac", "-b:a", "192k"]
+      : ["-an"]),
     "-c:v",
     options.format === "webm" ? "libvpx-vp9" : "libx264",
     "-pix_fmt",
