@@ -264,6 +264,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           trimStart: el.trimStart,
           trimEnd: el.trimEnd,
           volume: el.volume,
+          speed: el.speed ?? 1,
           name: `${asset.name} (audio)`,
         },
       ],

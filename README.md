@@ -1,6 +1,6 @@
 # CapCut D-Social Studio
 
-Trình chỉnh sửa video social độc lập, xây dựng bằng Next.js 14, React, Zustand và FFmpeg.wasm. Giao diện/kiến trúc tham khảo OpenCut; không phải bản fork hay bản sao nguyên trạng.
+Trình chỉnh sửa video social độc lập, xây dựng bằng Next.js 15, React, Zustand và FFmpeg.wasm. Giao diện/kiến trúc tham khảo OpenCut; không phải bản fork hay bản sao nguyên trạng.
 
 ## Tính năng hiện có
 
@@ -8,12 +8,17 @@ Trình chỉnh sửa video social độc lập, xây dựng bằng Next.js 14, R
 |---|---|
 | Timeline | Nhiều track video/text/audio, kéo clip, đổi track, resize, split, xóa; thumbnail cho ảnh/video |
 | History | Undo/Redo tối đa 50 bước |
-| Text | Overlay tiếng Việt, font Noto Sans khi export |
+| Text | Overlay tiếng Việt, font Noto Sans, vị trí/tỷ lệ/rotation/opacity và fade |
 | Fade/Transition | Fade In/Out, Dissolve, Fade, Slide |
-| Audio | Volume theo clip/track, tách audio từ video |
-| Export | MP4 720p/1080p bằng FFmpeg.wasm; áp dụng trim và ghép track audio; lỗi encode được báo rõ, không tạo video nền giả |
+| Color & effects | Brightness, contrast, saturation, hue, blur; preset Gốc/Rực rỡ/Ấm/Lạnh/Đen trắng/Mềm |
+| Speed | 0.5x–2x cho video và audio, đồng bộ Preview và export |
+| Transform | Canvas-relative position, scale, rotation, opacity được áp dụng khi export |
+| Motion keyframes | Tạo keyframe tại playhead, nội suy vị trí X/Y và scale trong Preview và export |
+| Audio | Kho nhạc do người dùng nhập, nghe thử, nhiều track, volume/fade theo clip và track, tách audio từ video |
+| Export | MP4 720p/1080p bằng FFmpeg.wasm; trim, speed, transforms, filters, audio mix/fade; lỗi encode được báo rõ, không tạo video nền giả |
+| Cloud | Supabase email/password sign-in, refresh session, lưu/mở project và đồng bộ media trong private Storage bucket (50 MiB/file) |
 | Local persistence | Metadata autosave và media gốc trong IndexedDB |
-| Mobile | Giao diện tab Media / Preview / Chỉnh sửa, Timeline hỗ trợ pointer/touch |
+| Mobile | Giao diện tab Media / Preview / Chỉnh sửa; Media có tab Kho nhạc; Timeline hỗ trợ pointer/touch |
 | PWA | Web app manifest, viewport và biểu tượng cài đặt |
 
 ## Chạy local
@@ -39,7 +44,9 @@ IndexedDB phụ thuộc dung lượng thiết bị và chính sách dọn dữ l
 
 ## Supabase Cloud API
 
-Migration: `supabase/migrations/20261030030211_editor_projects_and_assets_20261030.sql`.
+Migrations:
+- `supabase/migrations/20261030030211_editor_projects_and_assets_20261030.sql`
+- `supabase/migrations/20261030093409_editor_media_mime_support.sql` (mở rộng MIME types cho video/âm thanh/ảnh trên mobile).
 
 Thiết lập biến môi trường trong Vercel/local:
 
@@ -60,10 +67,19 @@ Endpoints:
 - `POST /api/projects/:id/assets` — đăng ký metadata JSON sau khi browser upload file trực tiếp lên private Storage bucket. Client helper nằm ở `lib/cloud-projects.ts`; file lớn không đi qua Vercel Function.
 - `GET /api/projects/:id/assets/:assetId` — tạo signed URL có thời hạn 1 giờ.
 
-Các hàm `saveCloudProject`, `loadCloudProject`, `uploadCloudAsset`, `getCloudAssetUrl` và `deleteCloudAsset` nhận Supabase access token từ luồng đăng nhập của ứng dụng gọi chúng.
+Editor có nút **Cloud** trên thanh trên cùng. Người dùng đăng nhập/tạo tài khoản bằng email/password Supabase; access token được refresh theo refresh token. Không yêu cầu service-role key ở client.
+
+Các hàm `saveCloudProject`, `loadCloudProject`, `uploadCloudAsset`, `getCloudAssetUrl` và `deleteCloudAsset` nhận Supabase access token. Khi lưu project, client upload binary media trực tiếp lên private Storage bucket rồi đăng ký metadata qua API. Khi mở project, client tạo signed URL, tải media về IndexedDB và dựng lại Blob URL để dùng offline.
 - `DELETE /api/projects/:id/assets/:assetId` — xóa file và metadata.
 
-**Lưu ý:** API và schema đã được chuẩn bị; để bật Cloud Save end-to-end cần chạy migration trên đúng Supabase project, cấu hình URL/anon key và nối luồng đăng nhập Supabase để cấp access token. Repo hiện chưa có màn hình đăng nhập Supabase hoặc nút đồng bộ Cloud trong editor. Không dùng service-role key để né RLS.
+**Lưu ý:** Cloud Save cần cấu hình URL/anon key và Supabase Auth email/password được bật. Email confirmation có thể cần xác minh email trước lần đăng nhập đầu. Mỗi media cloud bị giới hạn 50 MiB; file lớn hơn vẫn có thể lưu local và cần giảm dung lượng trước khi đồng bộ. Không dùng service-role key để né RLS.
+
+## Giới hạn hiện tại
+
+- Kho nhạc là thư viện âm thanh người dùng tự nhập từ thiết bị; repo không tự phân phối nhạc thương mại hoặc nhạc chưa rõ giấy phép.
+- Mỗi file đồng bộ lên Cloud tối đa 50 MiB theo giới hạn bucket.
+- Âm thanh nằm sẵn trong video được phát trong Preview; chọn **Tách audio** để tạo track âm thanh riêng và đưa vào file export.
+- AI auto-caption, TTS, xóa nền AI và motion tracking chưa được triển khai trong phiên bản này. Không hiển thị các nút giả cho những dịch vụ chưa cấu hình.
 
 ## Kiểm tra CI
 

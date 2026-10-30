@@ -42,6 +42,20 @@ export async function saveMediaFile(id: string, file: Blob): Promise<void> {
   }
 }
 
+export async function getMediaFile(id: string): Promise<Blob | undefined> {
+  const db = await openMediaDb();
+  try {
+    return await new Promise<Blob | undefined>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const request = tx.objectStore(STORE_NAME).get(id);
+      request.onsuccess = () => resolve(request.result?.blob as Blob | undefined);
+      request.onerror = () => reject(request.error ?? new Error("Không đọc được media đã lưu"));
+    });
+  } finally {
+    db.close();
+  }
+}
+
 export async function deleteMediaFile(id: string): Promise<void> {
   const db = await openMediaDb();
   try {

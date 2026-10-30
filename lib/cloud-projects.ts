@@ -22,16 +22,22 @@ function authHeaders(accessToken: string, extra?: HeadersInit) {
 }
 
 function getFileMimeType(file: File, assetType: Exclude<MediaType, "text">) {
-  if (file.type) return file.type;
   const ext = file.name.toLowerCase().split(".").pop();
   const byExtension: Record<string, string> = {
-    mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm",
+    mp4: "video/mp4", m4v: "video/x-m4v", mov: "video/quicktime", webm: "video/webm",
     mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav",
-    jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif",
+    ogg: "audio/ogg", oga: "audio/ogg", flac: "audio/flac", weba: "audio/webm",
+    jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", avif: "image/avif",
   };
-  const mime = ext ? byExtension[ext] : undefined;
-  if (mime) return mime;
-  throw new Error(`Không xác định được định dạng media: ${file.name}`);
+  // Android file pickers sometimes return an empty or generic MIME type.
+  const mime = !file.type || file.type === "application/octet-stream"
+    ? (ext ? byExtension[ext] : undefined)
+    : file.type;
+  if (!mime) throw new Error(`Không xác định được định dạng media: ${file.name}`);
+  if (assetType === "audio" && !mime.startsWith("audio/")) throw new Error("File đã chọn không phải âm thanh.");
+  if (assetType === "video" && !mime.startsWith("video/")) throw new Error("File đã chọn không phải video.");
+  if (assetType === "image" && !mime.startsWith("image/")) throw new Error("File đã chọn không phải hình ảnh.");
+  return mime;
 }
 
 function safeStorageName(name: string) {

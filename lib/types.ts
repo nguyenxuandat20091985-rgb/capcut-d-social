@@ -23,6 +23,14 @@ export interface MediaAsset {
   fontFamily?: string;
 }
 
+export interface ClipKeyframe {
+  /** Time in seconds relative to the start of its clip. */
+  time: number;
+  x: number;
+  y: number;
+  scale: number;
+}
+
 export interface TimelineElement {
   id: string;
   mediaId: string;
@@ -37,6 +45,14 @@ export interface TimelineElement {
   x: number;
   y: number;
   rotation: number;
+  /** Non-destructive image/video adjustments */
+  brightness: number;
+  contrast: number;
+  saturation: number;
+  hue: number;
+  blur: number;
+  speed: number;
+  keyframes?: ClipKeyframe[];
   name?: string;
   text?: string;
   fontSize?: number;
@@ -137,6 +153,13 @@ export function defaultElementProps(): Pick<
   | "x"
   | "y"
   | "rotation"
+  | "brightness"
+  | "contrast"
+  | "saturation"
+  | "hue"
+  | "blur"
+  | "speed"
+  | "keyframes"
   | "trimStart"
   | "trimEnd"
 > {
@@ -151,6 +174,12 @@ export function defaultElementProps(): Pick<
     x: 0,
     y: 0,
     rotation: 0,
+    brightness: 1,
+    contrast: 1,
+    saturation: 1,
+    hue: 0,
+    blur: 0,
+    speed: 1,
     trimStart: 0,
     trimEnd: 0,
   };

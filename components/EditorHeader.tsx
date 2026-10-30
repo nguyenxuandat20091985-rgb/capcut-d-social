@@ -23,6 +23,7 @@ import {
 import { useState, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { restoreMediaSources } from "@/lib/media-db";
+import CloudProjectsPanel from "./CloudProjectsPanel";
 
 const PHASE_LABEL: Record<ExportPhase, string> = {
   idle: "",
@@ -230,6 +231,8 @@ export default function EditorHeader() {
             <Redo2 size={16} />
           </button>
 
+          <CloudProjectsPanel />
+
           <button
             onClick={handleSave}
             className="rounded p-1.5 text-gray-300 hover:bg-gray-800"
@@ -253,7 +256,15 @@ export default function EditorHeader() {
           />
 
           <button
-            onClick={() => setPlaying(!isPlaying)}
+            onClick={() => {
+              const nextPlaying = !isPlaying;
+              document.querySelectorAll("video, audio").forEach((node) => {
+                const mediaNode = node as HTMLMediaElement;
+                if (nextPlaying) void mediaNode.play().catch((error) => console.warn("Playback blocked", error));
+                else mediaNode.pause();
+              });
+              setPlaying(nextPlaying);
+            }}
             className="ml-1 flex items-center gap-1.5 rounded-md bg-gray-800 px-3 py-1.5 text-sm hover:bg-gray-700"
           >
             {isPlaying ? <Pause size={14} /> : <Play size={14} />}

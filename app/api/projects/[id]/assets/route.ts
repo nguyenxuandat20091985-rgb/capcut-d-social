@@ -9,7 +9,7 @@ import {
 
 export const runtime = "nodejs";
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 
 async function ownsProject(context: SupabaseRequestContext, projectId: string) {
   const query = new URLSearchParams({ id: `eq.${projectId}`, select: "id", limit: "1" });
@@ -23,14 +23,15 @@ async function ownsProject(context: SupabaseRequestContext, projectId: string) {
 }
 
 export async function GET(request: Request, { params }: RouteContext) {
+  const { id } = await params;
   const auth = await getSupabaseContext(request);
   if (auth.error) return auth.error;
-  if (!(await ownsProject(auth.context, params.id))) {
+  if (!(await ownsProject(auth.context, id))) {
     return Response.json({ error: "Không tìm thấy project hoặc không có quyền truy cập." }, { status: 404 });
   }
 
   const query = new URLSearchParams({
-    project_id: `eq.${params.id}`,
+    project_id: `eq.${id}`,
     select: "id,asset_type,file_name,mime_type,file_size,created_at",
     order: "created_at.asc",
   });
@@ -45,9 +46,10 @@ export async function GET(request: Request, { params }: RouteContext) {
 }
 
 export async function POST(request: Request, { params }: RouteContext) {
+  const { id } = await params;
   const auth = await getSupabaseContext(request);
   if (auth.error) return auth.error;
-  if (!(await ownsProject(auth.context, params.id))) {
+  if (!(await ownsProject(auth.context, id))) {
     return Response.json({ error: "Không tìm thấy project hoặc không có quyền truy cập." }, { status: 404 });
   }
 
@@ -74,7 +76,7 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   // Upload bytes directly from the browser to Supabase Storage; never proxy large video files through a Vercel Function.
   const safeName = body.fileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120) || "media";
-  const storagePath = `${auth.context.userId}/${params.id}/${body.assetId}-${safeName}`;
+  const storagePath = `${auth.context.userId}/${id}/${body.assetId}-${safeName}`;
   const infoUrl = storageObjectUrl(auth.context, `object/info/project-assets/${encodeStoragePath(storagePath)}`);
   const storedObject = await fetch(infoUrl, {
     headers: supabaseHeaders(auth.context),
@@ -84,15 +86,15 @@ export async function POST(request: Request, { params }: RouteContext) {
     return Response.json({ error: "Chưa tìm thấy file trong Storage. Hãy upload file trực tiếp lên bucket trước khi đăng ký metadata." }, { status: 409 });
   }
 
-  const insert = await fetch(supabaseRestUrl(auth.context, "project_assets"), {
+  const insert = await fetch(supabaseRestUrl(auth.context, "project_assets?on_conflict=id"), {
     method: "POST",
     headers: supabaseHeaders(auth.context, {
       "content-type": "application/json",
-      Prefer: "return=representation",
+      Prefer: "resolution=merge-duplicates,return=representation",
     }),
     body: JSON.stringify({
       id: body.assetId,
-      project_id: params.id,
+      project_id: id,
       owner_id: auth.context.userId,
       asset_type: body.assetType,
       file_name: body.fileName,

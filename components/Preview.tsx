@@ -3,8 +3,27 @@
 import { useEditorStore } from "@/lib/store";
 import { formatTime } from "@/lib/utils";
 import { fadedOpacity, slideOffset } from "@/lib/fade";
+import { getMotionAtTime } from "@/lib/keyframes";
 import { useEffect, useRef, useMemo } from "react";
 import { Play, Pause } from "lucide-react";
+
+function clipFadeGain(el: { fadeIn?: number; fadeOut?: number; duration: number }, localTime: number) {
+  const fadeIn = Math.max(0, el.fadeIn ?? 0);
+  const fadeOut = Math.max(0, el.fadeOut ?? 0);
+  const fadeInGain = fadeIn > 0 ? Math.min(1, Math.max(0, localTime / fadeIn)) : 1;
+  const fadeOutGain = fadeOut > 0 ? Math.min(1, Math.max(0, (el.duration - localTime) / fadeOut)) : 1;
+  return Math.min(fadeInGain, fadeOutGain);
+}
+
+function clipCssFilter(el: { brightness?: number; contrast?: number; saturation?: number; hue?: number; blur?: number }) {
+  return [
+    `brightness(${el.brightness ?? 1})`,
+    `contrast(${el.contrast ?? 1})`,
+    `saturate(${el.saturation ?? 1})`,
+    `hue-rotate(${el.hue ?? 0}deg)`,
+    `blur(${el.blur ?? 0}px)`,
+  ].join(" ");
+}
 
 const ASPECT_MAP: Record<string, string> = {
   "9:16": "aspect-[9/16]",
@@ -65,7 +84,7 @@ export default function Preview() {
           !(media.find((m) => m.id === el.mediaId)?.type === "audio" &&
             tracks.find((t) => t.id === el.trackId)?.muted === true)
       ),
-    [elements, currentTime, tracks]
+    [elements, currentTime, tracks, media]
   );
 
   const stageW = stageRef.current?.clientWidth ?? 360;
@@ -87,6 +106,7 @@ export default function Preview() {
               const asset = media.find((m) => m.id === el.mediaId);
               if (!asset) return null;
               const local = currentTime - el.startTime;
+              const motion = getMotionAtTime(el, local);
               const opacity = fadedOpacity(el, local);
               const slideX = slideOffset(el, local, stageW);
 
@@ -100,7 +120,7 @@ export default function Preview() {
                     className="pointer-events-none absolute inset-0 flex items-center justify-center"
                     style={{
                       opacity,
-                      transform: `translate(${el.x + slideX}px, ${el.y}px) scale(${el.scale}) rotate(${el.rotation}deg)`,
+                      transform: `translate(${motion.x + slideX}%, ${motion.y}%) scale(${motion.scale}) rotate(${el.rotation}deg)`,
                     }}
                   >
                     <span
@@ -130,7 +150,8 @@ export default function Preview() {
                     className="absolute inset-0 h-full w-full object-contain"
                     style={{
                       opacity,
-                      transform: `translate(${el.x + slideX}px, ${el.y}px) scale(${el.scale}) rotate(${el.rotation}deg)`,
+                      filter: clipCssFilter(el),
+                      transform: `translate(${motion.x + slideX}%, ${motion.y}%) scale(${motion.scale}) rotate(${el.rotation}deg)`,
                     }}
                     draggable={false}
                   />
@@ -138,15 +159,20 @@ export default function Preview() {
               }
 
               if (asset.type === "video") {
+                const track = tracks.find((t) => t.id === el.trackId);
                 return (
                   <VideoLayer
                     key={el.id}
                     src={asset.src}
-                    localTime={local + (el.trimStart || 0)}
+                    localTime={local * (el.speed ?? 1) + (el.trimStart || 0)}
                     isPlaying={isPlaying}
+                    speed={el.speed ?? 1}
+                    muted={track?.muted ?? false}
+                    volume={Math.max(0, Math.min(1, (el.volume ?? 1) * (track?.volume ?? 1) * clipFadeGain(el, local)))}
                     opacity={opacity}
                     style={{
-                      transform: `translate(${el.x + slideX}px, ${el.y}px) scale(${el.scale}) rotate(${el.rotation}deg)`,
+                      filter: clipCssFilter(el),
+                      transform: `translate(${motion.x + slideX}%, ${motion.y}%) scale(${motion.scale}) rotate(${el.rotation}deg)`,
                     }}
                   />
                 );
@@ -158,9 +184,10 @@ export default function Preview() {
                   <AudioLayer
                     key={el.id}
                     src={asset.src}
-                    localTime={local + (el.trimStart || 0)}
+                    localTime={local * (el.speed ?? 1) + (el.trimStart || 0)}
                     isPlaying={isPlaying}
-                    volume={Math.max(0, Math.min(1, (el.volume ?? 1) * (track?.volume ?? 1)))}
+                    speed={el.speed ?? 1}
+                    volume={Math.max(0, Math.min(1, (el.volume ?? 1) * (track?.volume ?? 1) * clipFadeGain(el, local)))}
                   />
                 );
               }
@@ -174,7 +201,22 @@ export default function Preview() {
       <div className="flex shrink-0 items-center justify-center gap-3 border-t border-gray-800 bg-gray-950 px-3 py-2 text-xs text-gray-400">
         <button
           type="button"
-          onClick={() => setPlaying(!isPlaying)}
+          onClick={() => {
+            const nextPlaying = !isPlaying;
+            // Start/pause media synchronously inside the tap so Android browsers
+            // recognize the action as a direct user gesture (autoplay policy).
+            stageRef.current?.querySelectorAll("video, audio").forEach((node) => {
+              const mediaNode = node as HTMLMediaElement;
+              if (nextPlaying) {
+                void mediaNode.play().catch((error) => {
+                  console.warn("Preview playback was blocked by the browser.", error);
+                });
+              } else {
+                mediaNode.pause();
+              }
+            });
+            setPlaying(nextPlaying);
+          }}
           aria-label={isPlaying ? "Tạm dừng xem trước" : "Phát xem trước"}
           className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition hover:bg-blue-500 active:scale-95"
         >
@@ -200,12 +242,18 @@ function VideoLayer({
   src,
   localTime,
   isPlaying,
+  muted,
+  volume,
+  speed,
   opacity,
   style,
 }: {
   src: string;
   localTime: number;
   isPlaying: boolean;
+  muted: boolean;
+  volume: number;
+  speed: number;
   opacity: number;
   style: React.CSSProperties;
 }) {
@@ -218,6 +266,14 @@ function VideoLayer({
       v.currentTime = Math.max(0, localTime);
     }
   }, [localTime]);
+
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    v.muted = muted;
+    v.volume = volume;
+    v.playbackRate = speed;
+  }, [muted, volume, speed]);
 
   useEffect(() => {
     const v = ref.current;
@@ -235,7 +291,7 @@ function VideoLayer({
       src={src}
       className="absolute inset-0 h-full w-full object-contain"
       style={{ opacity, ...style }}
-      muted
+      muted={muted}
       playsInline
       preload="auto"
     />
@@ -249,11 +305,13 @@ function AudioLayer({
   localTime,
   isPlaying,
   volume,
+  speed,
 }: {
   src: string;
   localTime: number;
   isPlaying: boolean;
   volume: number;
+  speed: number;
 }) {
   const ref = useRef<HTMLAudioElement>(null);
 
@@ -269,6 +327,7 @@ function AudioLayer({
     const audio = ref.current;
     if (!audio) return;
     audio.volume = volume;
+    audio.playbackRate = speed;
     if (isPlaying) {
       audio.play().catch((error) => {
         console.warn("Audio preview could not start; tap Play again if the browser blocked autoplay.", error);
@@ -276,7 +335,7 @@ function AudioLayer({
     } else {
       audio.pause();
     }
-  }, [isPlaying, volume]);
+  }, [isPlaying, volume, speed]);
 
   return <audio ref={ref} src={src} preload="auto" />;
 }

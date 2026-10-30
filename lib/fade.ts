@@ -19,6 +19,8 @@ export function fadedOpacity(
   // Simple dissolve / fade transition at start
   if (
     el.transitionIn !== "none" &&
+    el.transitionIn !== "slide-left" &&
+    el.transitionIn !== "slide-right" &&
     el.transitionDuration > 0 &&
     localTime < el.transitionDuration
   ) {
@@ -28,11 +30,11 @@ export function fadedOpacity(
   return base * factor;
 }
 
-/** Horizontal offset for slide transitions (px relative to canvas width fraction) */
+/** Horizontal offset for slide transitions as a percentage of canvas width. */
 export function slideOffset(
   el: TimelineElement,
   localTime: number,
-  canvasWidth: number
+  _canvasWidth: number
 ): number {
   if (
     el.transitionIn !== "slide-left" &&
@@ -45,5 +47,5 @@ export function slideOffset(
   }
   const t = 1 - localTime / el.transitionDuration;
   const dir = el.transitionIn === "slide-left" ? 1 : -1;
-  return dir * t * canvasWidth;
+  return dir * t * 100;
 }

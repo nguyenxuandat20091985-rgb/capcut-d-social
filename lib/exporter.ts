@@ -10,6 +10,7 @@ import type {
   ExportResolution,
 } from "./types";
 import { resolutionPixels } from "./types";
+import { motionExpression } from "./keyframes";
 
 export interface ExportOptions {
   format: "mp4" | "webm";
@@ -62,7 +63,7 @@ async function getFFmpeg(onLog?: (msg: string) => void): Promise<FFmpeg> {
   if (ffmpegInstance?.loaded) return ffmpegInstance;
   if (loadingPromise) return loadingPromise;
 
-  loadingPromise = (async () => {
+  const pending = (async () => {
     const ffmpeg = new FFmpeg();
     ffmpeg.on("log", ({ message }) => onLog?.(message));
     const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
@@ -77,6 +78,13 @@ async function getFFmpeg(onLog?: (msg: string) => void): Promise<FFmpeg> {
     return ffmpeg;
   })();
 
+  // A failed CDN/network load must not poison every later retry with the same
+  // rejected promise. Let the next Export attempt start a fresh load.
+  loadingPromise = pending.catch((error) => {
+    loadingPromise = null;
+    ffmpegInstance = null;
+    throw error;
+  });
   return loadingPromise;
 }
 
@@ -97,6 +105,34 @@ async function ensureFont(
   } catch (err) {
     console.warn("Font load failed", err);
   }
+}
+
+function mediaExtension(asset: MediaAsset): string {
+  const mime = (asset.mimeType || "").toLowerCase().split(";")[0];
+  const byMime: Record<string, string> = {
+    "video/mp4": "mp4",
+    "video/quicktime": "mov",
+    "video/webm": "webm",
+    "video/x-m4v": "m4v",
+    "audio/mpeg": "mp3",
+    "audio/mp4": "m4a",
+    "audio/aac": "aac",
+    "audio/wav": "wav",
+    "audio/x-wav": "wav",
+    "audio/ogg": "ogg",
+    "audio/flac": "flac",
+    "audio/webm": "webm",
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "image/avif": "avif",
+  };
+  if (byMime[mime]) return byMime[mime];
+  const extension = asset.name.toLowerCase().match(/\\.([a-z0-9]{2,5})$/)?.[1];
+  const allowed = new Set(["mp4", "mov", "m4v", "webm", "mp3", "m4a", "aac", "wav", "ogg", "flac", "jpg", "jpeg", "png", "webp", "gif", "avif"]);
+  if (extension && allowed.has(extension)) return extension === "jpeg" ? "jpg" : extension;
+  return asset.type === "audio" ? "mp3" : asset.type === "image" ? "jpg" : "mp4";
 }
 
 function crfFor(quality: ExportOptions["quality"]) {
@@ -199,14 +235,7 @@ export async function exportProject(
     if (fileMap.has(asset.id)) continue;
     if (!asset.src) continue;
 
-    const ext =
-      asset.type === "image"
-        ? asset.mimeType?.includes("png")
-          ? "png"
-          : "jpg"
-        : asset.type === "audio"
-          ? "mp3"
-          : "mp4";
+    const ext = mediaExtension(asset);
 
     const filename = `in_${fileIdx++}.${ext}`;
     try {
@@ -255,8 +284,9 @@ export async function exportProject(
       inputArgs.push("-loop", "1", "-t", String(el.duration), "-i", fname);
     } else {
       // Seek and bound each placed instance independently so trim handles affect export.
+      const speed = Math.max(0.5, Math.min(2, el.speed ?? 1));
       if ((el.trimStart || 0) > 0) inputArgs.push("-ss", String(el.trimStart));
-      inputArgs.push("-t", String(el.duration), "-i", fname);
+      inputArgs.push("-t", String(el.duration * speed), "-i", fname);
     }
     elInputIndex.set(el.id, nextInput);
     nextInput++;
@@ -274,8 +304,9 @@ export async function exportProject(
     const asset = media.find((m) => m.id === el.mediaId);
     const fname = asset ? fileMap.get(asset.id) : undefined;
     if (!fname) continue;
+    const speed = Math.max(0.5, Math.min(2, el.speed ?? 1));
     if ((el.trimStart || 0) > 0) inputArgs.push("-ss", String(el.trimStart));
-    inputArgs.push("-t", String(el.duration), "-i", fname);
+    inputArgs.push("-t", String(el.duration * speed), "-i", fname);
     audioInputIndex.set(el.id, nextInput++);
   }
 
@@ -291,15 +322,40 @@ export async function exportProject(
     if (asset.type === "text") {
       const txt = escapeDrawtext(el.text ?? asset.text ?? "Text");
       const fs = el.fontSize ?? asset.fontSize ?? 48;
-      const fc = (el.fontColor ?? asset.fontColor ?? "#ffffff").replace(
-        "#",
-        ""
-      );
+      const fc = (el.fontColor ?? asset.fontColor ?? "#ffffff").replace("#", "");
+      const textOpacity = Math.max(0, Math.min(1, el.opacity ?? 1));
+      const textX = Math.max(-100, Math.min(100, el.x ?? 0));
+      const textY = Math.max(-100, Math.min(100, el.y ?? 0));
+      const textScale = Math.max(0.1, Math.min(3, el.scale ?? 1));
+      const textScaleExpr = motionExpression(el, "scale", textScale);
+      const textXExpr = motionExpression(el, "x", textX);
+      const textYExpr = motionExpression(el, "y", textY);
+      const hasMotionKeyframes = (el.keyframes?.length ?? 0) > 0;
+      const textRotation = (el.rotation ?? 0) * Math.PI / 180;
+      const slideDuration = Math.max(0, Math.min(el.duration, el.transitionDuration ?? 0.5));
+      const slideDirection = el.transitionIn === "slide-left" ? 1 : el.transitionIn === "slide-right" ? -1 : 0;
+      const textTransitionFade = el.transitionIn === "fade" || el.transitionIn === "dissolve" ? (el.transitionDuration ?? 0) : 0;
+      const textFadeIn = Math.max(0, Math.min(el.duration, Math.max(el.fadeIn ?? 0, textTransitionFade)));
+      const textFadeOut = Math.max(0, Math.min(el.duration, el.fadeOut ?? 0));
+      let textAlpha = textOpacity.toFixed(3);
+      if (textFadeIn > 0) textAlpha += `*if(lt(t,${start}+${textFadeIn.toFixed(3)}),max(0,(t-${start})/${textFadeIn.toFixed(3)}),1)`;
+      if (textFadeOut > 0) textAlpha += `*if(gt(t,${end}-${textFadeOut.toFixed(3)}),max(0,(${end}-t)/${textFadeOut.toFixed(3)}),1)`;
+      const textLayer = `txtlayer${overlayIdx}`;
       const out = `tx${overlayIdx}`;
       const fontOpt = hasFont ? `:fontfile=${FONT_FS_NAME}` : "";
-      // approximate fade via alpha not available on drawtext easily — use enable window
+      let textChain = `color=c=black@0:s=${width}x${height}:d=${duration}:r=${fps},format=yuva420p,drawtext=text='${txt}'${fontOpt}:fontsize=${fs}:fontcolor=0x${fc}:alpha='${textAlpha}':x=(w-text_w)/2:y=(h-text_h)/2`;
+      if (hasMotionKeyframes) textChain += `,scale=w='max(1,iw*(${textScaleExpr}))':h='max(1,ih*(${textScaleExpr}))':eval=frame`;
+      else if (textScale !== 1) textChain += `,scale=w='max(1,iw*${textScale.toFixed(3)})':h='max(1,ih*${textScale.toFixed(3)})'`;
+      if (textRotation !== 0) textChain += `,rotate=${textRotation.toFixed(5)}:ow=rotw(iw):oh=roth(ih):c=black@0`;
+      filterParts.push(`${textChain}[${textLayer}]`);
+
+      const baseTextX = `(W-w)/2+(${textXExpr}/100)*W`;
+      const textOverlayX = slideDirection !== 0 && slideDuration > 0
+        ? `if(lt(t,${start}+${slideDuration.toFixed(3)}),${baseTextX}+${slideDirection}*W*(1-(t-${start})/${slideDuration.toFixed(3)}),${baseTextX})`
+        : baseTextX;
+      const textOverlayY = `(H-h)/2+(${textYExpr}/100)*H`;
       filterParts.push(
-        `[${lastLabel}]drawtext=text='${txt}'${fontOpt}:fontsize=${fs}:fontcolor=0x${fc}:x=(w-text_w)/2+${el.x}:y=(h-text_h)/2+${el.y}:enable='between(t,${start},${end})'[${out}]`
+        `[${lastLabel}][${textLayer}]overlay=x='${textOverlayX}':y='${textOverlayY}':enable='between(t,${start},${end})'[${out}]`
       );
       lastLabel = out;
       overlayIdx++;
@@ -314,7 +370,39 @@ export async function exportProject(
     const out = `ov${overlayIdx}`;
 
     // Scale + pad
-    let chain = `[${inIdx}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,format=yuva420p,setpts=PTS-STARTPTS+${start}/TB`;
+    const speed = Math.max(0.5, Math.min(2, el.speed ?? 1));
+    const clipScale = Math.max(0.1, Math.min(3, el.scale ?? 1));
+    const clipRotation = (el.rotation ?? 0) * Math.PI / 180;
+    const clipOpacity = Math.max(0, Math.min(1, el.opacity ?? 1));
+    const positionX = Math.max(-100, Math.min(100, el.x ?? 0));
+    const positionY = Math.max(-100, Math.min(100, el.y ?? 0));
+    const positionXExpr = motionExpression(el, "x", positionX);
+    const positionYExpr = motionExpression(el, "y", positionY);
+    const hasMotionKeyframes = (el.keyframes?.length ?? 0) > 0;
+    let chain = `[${inIdx}:v]scale=${width}:${height}:force_original_aspect_ratio=decrease,format=yuva420p,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black@0,setpts=(PTS-STARTPTS)/${speed.toFixed(3)}+${start}/TB`;
+    if (hasMotionKeyframes) chain += `,scale=w='max(1,iw*(${motionExpression(el, "scale", clipScale)}))':h='max(1,ih*(${motionExpression(el, "scale", clipScale)}))':eval=frame`;
+    else if (clipScale !== 1) chain += `,scale=w='max(1,iw*${clipScale.toFixed(3)})':h='max(1,ih*${clipScale.toFixed(3)})'`;
+    if (clipRotation !== 0) chain += `,rotate=${clipRotation.toFixed(5)}:ow=rotw(iw):oh=roth(ih):c=black@0`;
+    if (clipOpacity < 1) chain += `,colorchannelmixer=aa=${clipOpacity.toFixed(3)}`;
+    const transitionFade = el.transitionIn === "fade" || el.transitionIn === "dissolve"
+      ? (el.transitionDuration ?? 0)
+      : 0;
+    const visualFadeIn = Math.max(0, Math.min(el.duration, Math.max(el.fadeIn ?? 0, transitionFade)));
+    const visualFadeOut = Math.max(0, Math.min(el.duration, el.fadeOut ?? 0));
+    if (visualFadeIn > 0) chain += `,fade=t=in:st=${start}:d=${visualFadeIn.toFixed(3)}:alpha=1`;
+    if (visualFadeOut > 0) chain += `,fade=t=out:st=${(el.startTime + el.duration - visualFadeOut).toFixed(3)}:d=${visualFadeOut.toFixed(3)}:alpha=1`;
+
+    // Apply non-destructive color controls consistently with the live Preview.
+    const brightness = Math.max(0, Math.min(2, el.brightness ?? 1));
+    const contrast = Math.max(0.5, Math.min(2, el.contrast ?? 1));
+    const saturation = Math.max(0, Math.min(3, el.saturation ?? 1));
+    const hue = Math.max(-180, Math.min(180, el.hue ?? 0));
+    const blur = Math.max(0, Math.min(12, el.blur ?? 0));
+    if (brightness !== 1 || contrast !== 1 || saturation !== 1) {
+      chain += `,eq=brightness=${(brightness - 1).toFixed(3)}:contrast=${contrast.toFixed(3)}:saturation=${saturation.toFixed(3)}`;
+    }
+    if (hue !== 0) chain += `,hue=h=${hue.toFixed(1)}`;
+    if (blur > 0) chain += `,gblur=sigma=${Math.max(0.1, blur).toFixed(2)}`;
 
     // Fade in/out on the clip stream (relative to clip)
     const fi = el.fadeIn || 0;
@@ -333,15 +421,15 @@ export async function exportProject(
     chain += `[${scaled}]`;
     filterParts.push(chain);
 
-    // Slide offset approximation via overlay x
-    let ox = 0;
-    if (el.transitionIn === "slide-left" || el.transitionIn === "slide-right") {
-      // static mid-point not animated in simple graph — center
-      ox = 0;
-    }
-
+    const baseOverlayX = `(W-w)/2+(${positionXExpr}/100)*W`;
+    const overlayY = `(H-h)/2+(${positionYExpr}/100)*H`;
+    const slideDuration = Math.max(0, Math.min(el.duration, el.transitionDuration ?? 0.5));
+    const slideDirection = el.transitionIn === "slide-left" ? 1 : el.transitionIn === "slide-right" ? -1 : 0;
+    const overlayX = slideDirection !== 0 && slideDuration > 0
+      ? `if(lt(t,${start}+${slideDuration.toFixed(3)}),${baseOverlayX}+${slideDirection}*W*(1-(t-${start})/${slideDuration.toFixed(3)}),${baseOverlayX})`
+      : baseOverlayX;
     filterParts.push(
-      `[${lastLabel}][${scaled}]overlay=${ox}:0:enable='${fadeEnableExpr(el)}'[${out}]`
+      `[${lastLabel}][${scaled}]overlay=x='${overlayX}':y='${overlayY}':enable='${fadeEnableExpr(el)}'[${out}]`
     );
 
     lastLabel = out;
@@ -357,11 +445,16 @@ export async function exportProject(
     if (inputIndex === undefined) continue;
     const track = tracks.find((t) => t.id === el.trackId);
     const volume = Math.max(0, Math.min(4, (el.volume ?? 1) * (track?.volume ?? 1)));
+    const speed = Math.max(0.5, Math.min(2, el.speed ?? 1));
+    const sourceDuration = el.duration * speed;
     const delayMs = Math.max(0, Math.round(el.startTime * 1000));
     const label = `aud${audioIndex++}`;
-    audioFilterParts.push(
-      `[${inputIndex}:a]atrim=start=0:duration=${el.duration.toFixed(3)},asetpts=PTS-STARTPTS,volume=${volume.toFixed(3)},adelay=${delayMs}:all=1[${label}]`
-    );
+    const fadeIn = Math.max(0, Math.min(el.duration, el.fadeIn ?? 0));
+    const fadeOut = Math.max(0, Math.min(el.duration, el.fadeOut ?? 0));
+    let audioChain = `[${inputIndex}:a]atrim=start=0:duration=${sourceDuration.toFixed(3)},asetpts=PTS-STARTPTS,atempo=${speed.toFixed(3)},volume=${volume.toFixed(3)}`;
+    if (fadeIn > 0) audioChain += `,afade=t=in:st=0:d=${fadeIn.toFixed(3)}`;
+    if (fadeOut > 0) audioChain += `,afade=t=out:st=${Math.max(0, el.duration - fadeOut).toFixed(3)}:d=${fadeOut.toFixed(3)}`;
+    audioFilterParts.push(`${audioChain},adelay=${delayMs}:all=1[${label}]`);
   }
   if (audioIndex > 0) {
     const labels = Array.from({ length: audioIndex }, (_, i) => `[aud${i}]`).join("");

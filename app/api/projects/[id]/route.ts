@@ -2,14 +2,15 @@ import { encodeStoragePath, getSupabaseContext, storageObjectUrl, supabaseHeader
 
 export const runtime = "nodejs";
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, { params }: RouteContext) {
+  const { id } = await params;
   const auth = await getSupabaseContext(request);
   if (auth.error) return auth.error;
 
   const query = new URLSearchParams({
-    id: `eq.${params.id}`,
+    id: `eq.${id}`,
     select: "id,title,project_data,created_at,updated_at",
     limit: "1",
   });
@@ -22,6 +23,7 @@ export async function GET(request: Request, { params }: RouteContext) {
 }
 
 export async function PATCH(request: Request, { params }: RouteContext) {
+  const { id } = await params;
   const auth = await getSupabaseContext(request);
   if (auth.error) return auth.error;
 
@@ -37,7 +39,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   if (body.projectData && typeof body.projectData === "object") patch.project_data = body.projectData;
   if (!Object.keys(patch).length) return Response.json({ error: "Không có dữ liệu cần cập nhật." }, { status: 400 });
 
-  const query = new URLSearchParams({ id: `eq.${params.id}`, select: "id,title,updated_at" });
+  const query = new URLSearchParams({ id: `eq.${id}`, select: "id,title,updated_at" });
   const response = await fetch(supabaseRestUrl(auth.context, `projects?${query}`), {
     method: "PATCH",
     headers: supabaseHeaders(auth.context, {
@@ -52,11 +54,12 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 }
 
 export async function DELETE(request: Request, { params }: RouteContext) {
+  const { id } = await params;
   const auth = await getSupabaseContext(request);
   if (auth.error) return auth.error;
 
   const assetQuery = new URLSearchParams({
-    project_id: `eq.${params.id}`,
+    project_id: `eq.${id}`,
     select: "storage_path",
   });
   const assetsResponse = await fetch(
@@ -85,7 +88,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     }
   }
 
-  const query = new URLSearchParams({ id: `eq.${params.id}` });
+  const query = new URLSearchParams({ id: `eq.${id}` });
   const response = await fetch(supabaseRestUrl(auth.context, `projects?${query}`), {
     method: "DELETE",
     headers: supabaseHeaders(auth.context, { Prefer: "return=minimal" }),

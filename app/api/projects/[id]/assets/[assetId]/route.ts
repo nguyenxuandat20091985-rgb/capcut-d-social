@@ -8,7 +8,7 @@ import {
 
 export const runtime = "nodejs";
 
-type RouteContext = { params: { id: string; assetId: string } };
+type RouteContext = { params: Promise<{ id: string; assetId: string }> };
 
 async function findAsset(request: Request, projectId: string, assetId: string) {
   const auth = await getSupabaseContext(request);
@@ -30,7 +30,8 @@ async function findAsset(request: Request, projectId: string, assetId: string) {
 }
 
 export async function GET(request: Request, { params }: RouteContext) {
-  const found = await findAsset(request, params.id, params.assetId);
+  const { id, assetId } = await params;
+  const found = await findAsset(request, id, assetId);
   if ("error" in found) return found.error;
 
   const signed = await fetch(
@@ -57,7 +58,8 @@ export async function GET(request: Request, { params }: RouteContext) {
 }
 
 export async function DELETE(request: Request, { params }: RouteContext) {
-  const found = await findAsset(request, params.id, params.assetId);
+  const { id, assetId } = await params;
+  const found = await findAsset(request, id, assetId);
   if ("error" in found) return found.error;
 
   const objectUrl = storageObjectUrl(found.context, `object/project-assets/${encodeStoragePath(String(found.asset.storage_path))}`);
@@ -70,7 +72,7 @@ export async function DELETE(request: Request, { params }: RouteContext) {
     return Response.json({ error: "Không xóa được file trong Storage.", detail: await removed.text() }, { status: removed.status });
   }
 
-  const query = new URLSearchParams({ id: `eq.${params.assetId}`, project_id: `eq.${params.id}` });
+  const query = new URLSearchParams({ id: `eq.${assetId}`, project_id: `eq.${id}` });
   const row = await fetch(supabaseRestUrl(found.context, `project_assets?${query}`), {
     method: "DELETE",
     headers: supabaseHeaders(found.context, { Prefer: "return=minimal" }),
