@@ -324,14 +324,14 @@ export async function exportProject(
       const fs = el.fontSize ?? asset.fontSize ?? 48;
       const fc = (el.fontColor ?? asset.fontColor ?? "#ffffff").replace("#", "");
       const textOpacity = Math.max(0, Math.min(1, el.opacity ?? 1));
+      const textX = Math.max(-100, Math.min(100, el.x ?? 0));
+      const textY = Math.max(-100, Math.min(100, el.y ?? 0));
       const textScale = Math.max(0.1, Math.min(3, el.scale ?? 1));
       const textScaleExpr = motionExpression(el, "scale", textScale);
       const textXExpr = motionExpression(el, "x", textX);
       const textYExpr = motionExpression(el, "y", textY);
       const hasMotionKeyframes = (el.keyframes?.length ?? 0) > 0;
       const textRotation = (el.rotation ?? 0) * Math.PI / 180;
-      const textX = Math.max(-100, Math.min(100, el.x ?? 0));
-      const textY = Math.max(-100, Math.min(100, el.y ?? 0));
       const slideDuration = Math.max(0, Math.min(el.duration, el.transitionDuration ?? 0.5));
       const slideDirection = el.transitionIn === "slide-left" ? 1 : el.transitionIn === "slide-right" ? -1 : 0;
       const textTransitionFade = el.transitionIn === "fade" || el.transitionIn === "dissolve" ? (el.transitionDuration ?? 0) : 0;
