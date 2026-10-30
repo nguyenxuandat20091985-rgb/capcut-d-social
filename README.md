@@ -6,12 +6,12 @@ Trình chỉnh sửa video social độc lập, xây dựng bằng Next.js 14, R
 
 | Nhóm | Chi tiết |
 |---|---|
-| Timeline | Nhiều track video/text/audio, kéo clip, đổi track, resize, split, xóa |
+| Timeline | Nhiều track video/text/audio, kéo clip, đổi track, resize, split, xóa; thumbnail cho ảnh/video |
 | History | Undo/Redo tối đa 50 bước |
 | Text | Overlay tiếng Việt, font Noto Sans khi export |
 | Fade/Transition | Fade In/Out, Dissolve, Fade, Slide |
 | Audio | Volume theo clip/track, tách audio từ video |
-| Export | MP4 720p/1080p bằng FFmpeg.wasm, có tiến trình |
+| Export | MP4 720p/1080p bằng FFmpeg.wasm; áp dụng trim và ghép track audio; lỗi encode được báo rõ, không tạo video nền giả |
 | Local persistence | Metadata autosave và media gốc trong IndexedDB |
 | Mobile | Giao diện tab Media / Preview / Chỉnh sửa, Timeline hỗ trợ pointer/touch |
 | PWA | Web app manifest, viewport và biểu tượng cài đặt |
