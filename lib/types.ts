@@ -23,6 +23,14 @@ export interface MediaAsset {
   fontFamily?: string;
 }
 
+export interface ClipKeyframe {
+  /** Time in seconds relative to the start of its clip. */
+  time: number;
+  x: number;
+  y: number;
+  scale: number;
+}
+
 export interface TimelineElement {
   id: string;
   mediaId: string;
@@ -44,6 +52,7 @@ export interface TimelineElement {
   hue: number;
   blur: number;
   speed: number;
+  keyframes?: ClipKeyframe[];
   name?: string;
   text?: string;
   fontSize?: number;
@@ -150,6 +159,7 @@ export function defaultElementProps(): Pick<
   | "hue"
   | "blur"
   | "speed"
+  | "keyframes"
   | "trimStart"
   | "trimEnd"
 > {
