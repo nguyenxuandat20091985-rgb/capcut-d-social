@@ -97,7 +97,7 @@ export default function EditorHeader() {
 
   const handleSave = () => {
     const file = exportProjectFile();
-    // include blob srcs for same-browser restore notes in JSON meta only
+    // JSON stores project structure; binary media remains in IndexedDB.
     downloadProjectJson(file);
     persistAutosave();
   };
