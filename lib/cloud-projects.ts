@@ -21,6 +21,19 @@ function authHeaders(accessToken: string, extra?: HeadersInit) {
   return headers;
 }
 
+function getFileMimeType(file: File, assetType: Exclude<MediaType, "text">) {
+  if (file.type) return file.type;
+  const ext = file.name.toLowerCase().split(".").pop();
+  const byExtension: Record<string, string> = {
+    mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm",
+    mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav",
+    jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif",
+  };
+  const mime = ext ? byExtension[ext] : undefined;
+  if (mime) return mime;
+  throw new Error(`Không xác định được định dạng media: ${file.name}`);
+}
+
 function safeStorageName(name: string) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-120) || "media";
 }
@@ -81,6 +94,7 @@ export async function uploadCloudAsset(
   accessToken: string
 ) {
   const { url, anonKey } = supabaseConfig();
+  const mimeType = getFileMimeType(file, assetType);
   const storagePath = `${userId}/${projectId}/${assetId}-${safeStorageName(file.name)}`;
   const objectUrl = `${url}/storage/v1/object/project-assets/${encodeStoragePath(storagePath)}`;
 
@@ -89,7 +103,7 @@ export async function uploadCloudAsset(
     headers: {
       apikey: anonKey,
       Authorization: `Bearer ${accessToken}`,
-      "content-type": file.type || "application/octet-stream",
+      "content-type": mimeType,
       "x-upsert": "true",
     },
     body: file,
@@ -107,7 +121,7 @@ export async function uploadCloudAsset(
         assetId,
         assetType,
         fileName: file.name,
-        mimeType: file.type || "application/octet-stream",
+        mimeType,
         fileSize: file.size,
       }),
     }));
