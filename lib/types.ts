@@ -47,6 +47,9 @@ export interface TimelineElement {
   x: number;
   y: number;
   rotation: number;
+  /** Non-destructive horizontal/vertical flip. Optional for old project files. */
+  flipH?: boolean;
+  flipV?: boolean;
   /** Non-destructive image/video adjustments */
   brightness: number;
   contrast: number;
