@@ -389,8 +389,8 @@ export async function exportProject(
       : 0;
     const visualFadeIn = Math.max(0, Math.min(el.duration, Math.max(el.fadeIn ?? 0, transitionFade)));
     const visualFadeOut = Math.max(0, Math.min(el.duration, el.fadeOut ?? 0));
-    if (visualFadeIn > 0) chain += `,fade=t=in:st=${start.toFixed(3)}:d=${visualFadeIn.toFixed(3)}:alpha=1`;
-    if (visualFadeOut > 0) chain += `,fade=t=out:st=${(end - visualFadeOut).toFixed(3)}:d=${visualFadeOut.toFixed(3)}:alpha=1`;
+    if (visualFadeIn > 0) chain += `,fade=t=in:st=${start}:d=${visualFadeIn.toFixed(3)}:alpha=1`;
+    if (visualFadeOut > 0) chain += `,fade=t=out:st=${(el.startTime + el.duration - visualFadeOut).toFixed(3)}:d=${visualFadeOut.toFixed(3)}:alpha=1`;
 
     // Apply non-destructive color controls consistently with the live Preview.
     const brightness = Math.max(0, Math.min(2, el.brightness ?? 1));
