@@ -65,7 +65,7 @@ export default function Preview() {
           !(media.find((m) => m.id === el.mediaId)?.type === "audio" &&
             tracks.find((t) => t.id === el.trackId)?.muted === true)
       ),
-    [elements, currentTime, tracks]
+    [elements, currentTime, tracks, media]
   );
 
   const stageW = stageRef.current?.clientWidth ?? 360;
@@ -138,12 +138,15 @@ export default function Preview() {
               }
 
               if (asset.type === "video") {
+                const track = tracks.find((t) => t.id === el.trackId);
                 return (
                   <VideoLayer
                     key={el.id}
                     src={asset.src}
                     localTime={local + (el.trimStart || 0)}
                     isPlaying={isPlaying}
+                    muted={track?.muted ?? false}
+                    volume={Math.max(0, Math.min(1, (el.volume ?? 1) * (track?.volume ?? 1)))}
                     opacity={opacity}
                     style={{
                       transform: `translate(${el.x + slideX}px, ${el.y}px) scale(${el.scale}) rotate(${el.rotation}deg)`,
@@ -200,12 +203,16 @@ function VideoLayer({
   src,
   localTime,
   isPlaying,
+  muted,
+  volume,
   opacity,
   style,
 }: {
   src: string;
   localTime: number;
   isPlaying: boolean;
+  muted: boolean;
+  volume: number;
   opacity: number;
   style: React.CSSProperties;
 }) {
@@ -218,6 +225,13 @@ function VideoLayer({
       v.currentTime = Math.max(0, localTime);
     }
   }, [localTime]);
+
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    v.muted = muted;
+    v.volume = volume;
+  }, [muted, volume]);
 
   useEffect(() => {
     const v = ref.current;
@@ -235,7 +249,7 @@ function VideoLayer({
       src={src}
       className="absolute inset-0 h-full w-full object-contain"
       style={{ opacity, ...style }}
-      muted
+      muted={muted}
       playsInline
       preload="auto"
     />
