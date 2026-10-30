@@ -63,6 +63,7 @@ export default function PropertiesPanel() {
   const asset = media.find((m) => m.id === el.mediaId);
   const isText = asset?.type === "text";
   const isVideo = asset?.type === "video";
+  const isImage = asset?.type === "image";
   const isAudio = asset?.type === "audio";
 
   return (
@@ -237,6 +238,32 @@ export default function PropertiesPanel() {
           className="w-full"
         />
       </Field>
+
+      {(isVideo || isImage) && (
+        <>
+          <Section title="Màu sắc & bộ lọc" />
+          <Field label={`Độ sáng (${Math.round((el.brightness ?? 1) * 100)}%)`}>
+            <input type="range" min={0} max={2} step={0.01} value={el.brightness ?? 1}
+              onChange={(e) => updateElement(el.id, { brightness: parseFloat(e.target.value) })} className="w-full" />
+          </Field>
+          <Field label={`Tương phản (${Math.round((el.contrast ?? 1) * 100)}%)`}>
+            <input type="range" min={0.5} max={2} step={0.01} value={el.contrast ?? 1}
+              onChange={(e) => updateElement(el.id, { contrast: parseFloat(e.target.value) })} className="w-full" />
+          </Field>
+          <Field label={`Độ bão hòa (${Math.round((el.saturation ?? 1) * 100)}%)`}>
+            <input type="range" min={0} max={3} step={0.01} value={el.saturation ?? 1}
+              onChange={(e) => updateElement(el.id, { saturation: parseFloat(e.target.value) })} className="w-full" />
+          </Field>
+          <Field label={`Tông màu (${Math.round(el.hue ?? 0)}°)`}>
+            <input type="range" min={-180} max={180} step={1} value={el.hue ?? 0}
+              onChange={(e) => updateElement(el.id, { hue: parseFloat(e.target.value) })} className="w-full" />
+          </Field>
+          <Field label={`Làm mờ (${(el.blur ?? 0).toFixed(1)} px)`}>
+            <input type="range" min={0} max={12} step={0.1} value={el.blur ?? 0}
+              onChange={(e) => updateElement(el.id, { blur: parseFloat(e.target.value) })} className="w-full" />
+          </Field>
+        </>
+      )}
 
       {(isVideo || isAudio) && (
         <>
