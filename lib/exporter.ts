@@ -387,7 +387,9 @@ export async function exportProject(
   const data = await ffmpeg.readFile(outName);
   const mime =
     options.format === "webm" ? "video/webm" : "video/mp4";
-  const blob = new Blob([data], { type: mime });
+  const outputBytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
+  // Copy into a standalone ArrayBuffer to satisfy BlobPart typing across TS/DOM versions.
+  const blob = new Blob([Uint8Array.from(outputBytes).buffer], { type: mime });
 
   try {
     await ffmpeg.deleteFile(outName);
