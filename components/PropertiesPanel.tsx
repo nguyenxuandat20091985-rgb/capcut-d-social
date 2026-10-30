@@ -2,7 +2,6 @@
 
 import { useEditorStore } from "@/lib/store";
 import type { AspectRatio, TransitionType } from "@/lib/types";
-import { useEditorStore as editorStore } from "@/lib/store";
 
 const ASPECT_OPTIONS: AspectRatio[] = ["9:16", "16:9", "1:1", "4:5"];
 
