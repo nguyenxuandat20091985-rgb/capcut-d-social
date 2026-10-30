@@ -68,7 +68,9 @@ export async function restoreMediaSources(media: MediaAsset[]): Promise<MediaAss
         request.onsuccess = () => resolve(request.result?.blob as Blob | undefined);
         request.onerror = () => reject(request.error);
       });
-      return blob ? { ...asset, src: URL.createObjectURL(blob), fileSize: asset.fileSize ?? blob.size, mimeType: asset.mimeType || blob.type } : asset;
+      return blob
+        ? { ...asset, src: URL.createObjectURL(blob), fileSize: asset.fileSize ?? blob.size, mimeType: asset.mimeType || blob.type }
+        : { ...asset, src: asset.src?.startsWith("blob:") ? "" : asset.src };
     }));
   } finally {
     db.close();
