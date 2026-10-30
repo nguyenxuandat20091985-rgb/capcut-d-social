@@ -118,7 +118,7 @@ export default function Preview() {
                     className="pointer-events-none absolute inset-0 flex items-center justify-center"
                     style={{
                       opacity,
-                      transform: `translate(${el.x + slideX}px, ${el.y}px) scale(${el.scale}) rotate(${el.rotation}deg)`,
+                      transform: `translate(${el.x + slideX}%, ${el.y}%) scale(${el.scale}) rotate(${el.rotation}deg)`,
                     }}
                   >
                     <span
@@ -149,7 +149,7 @@ export default function Preview() {
                     style={{
                       opacity,
                       filter: clipCssFilter(el),
-                      transform: `translate(${el.x + slideX}px, ${el.y}px) scale(${el.scale}) rotate(${el.rotation}deg)`,
+                      transform: `translate(${el.x + slideX}%, ${el.y}%) scale(${el.scale}) rotate(${el.rotation}deg)`,
                     }}
                     draggable={false}
                   />
